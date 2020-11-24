@@ -358,6 +358,8 @@ func (fsr *fsLockedRepo) Blockstore(ctx context.Context, domain BlockstoreDomain
 			} else {
 				opts.SyncWrites = false
 			}
+		} else {
+			opts.SyncWrites = false
 		}
 
 		bs, err := badgerbs.Open(opts)
