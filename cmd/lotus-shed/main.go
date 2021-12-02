@@ -71,6 +71,7 @@ func main() {
 		migrationsCmd,
 		diffCmd,
 		itestdCmd,
+		dataexplCmd,
 	}
 
 	app := &cli.App{
