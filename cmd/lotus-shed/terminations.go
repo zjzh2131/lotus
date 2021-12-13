@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	lcli "github.com/filecoin-project/lotus/cli"
+	"golang.org/x/xerrors"
 	"io"
+	"math/big"
 
 	"github.com/filecoin-project/lotus/chain/types"
 
@@ -34,6 +37,11 @@ var terminationsCmd = &cli.Command{
 	},
 	Action: func(cctx *cli.Context) error {
 		ctx := context.TODO()
+		nodeApi, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
 
 		if !cctx.Args().Present() {
 			return fmt.Errorf("must pass block cid")
@@ -81,6 +89,7 @@ var terminationsCmd = &cli.Command{
 		store := adt.WrapStore(ctx, cst)
 
 		blk, err := cs.GetBlock(blkCid)
+
 		if err != nil {
 			return err
 		}
@@ -90,6 +99,7 @@ var terminationsCmd = &cli.Command{
 			return err
 		}
 
+		var totalBurn = big.NewInt(0);
 		for i := 0; i < 2880*2; i++ {
 			pts, err := cs.LoadTipSet(types.NewTipSetKey(blk.Parents...))
 			if err != nil {
@@ -107,6 +117,17 @@ var terminationsCmd = &cli.Command{
 				msg := v.VMMessage()
 				if msg.Method != miner.Methods.TerminateSectors {
 					continue
+				}
+
+				invocResult, err := nodeApi.StateCall(ctx, msg, types.EmptyTSK)
+				if err != nil {
+					return xerrors.Errorf("fail to state call: %w", err)
+				}
+
+				for _, im := range invocResult.ExecutionTrace.Subcalls {
+					if im.Msg.To.String() == "f099" /*Burn actor*/ {
+						totalBurn = totalBurn.Add(totalBurn, im.Msg.Value.Int)
+					}
 				}
 
 				tree, err := state.LoadStateTree(cst, blk.ParentStateRoot)
