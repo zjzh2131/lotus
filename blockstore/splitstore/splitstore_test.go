@@ -29,6 +29,7 @@ func init() {
 }
 
 func testSplitStore(t *testing.T, cfg *Config) {
+	ctx := context.Background()
 	chain := &mockChain{t: t}
 
 	// the myriads of stores
@@ -38,7 +39,7 @@ func testSplitStore(t *testing.T, cfg *Config) {
 
 	// this is necessary to avoid the garbage mock puts in the blocks
 	garbage := blocks.NewBlock([]byte{1, 2, 3})
-	err := cold.Put(garbage)
+	err := cold.Put(ctx, garbage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,21 +60,21 @@ func testSplitStore(t *testing.T, cfg *Config) {
 		t.Fatal(err)
 	}
 
-	err = cold.Put(blk)
+	err = cold.Put(ctx, blk)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// create a garbage block that is protected with a rgistered protector
 	protected := blocks.NewBlock([]byte("protected!"))
-	err = hot.Put(protected)
+	err = hot.Put(ctx, protected)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// and another one that is not protected
 	unprotected := blocks.NewBlock([]byte("unprotected!"))
-	err = hot.Put(unprotected)
+	err = hot.Put(ctx, unprotected)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,11 +109,11 @@ func testSplitStore(t *testing.T, cfg *Config) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = ss.Put(stateRoot)
+		err = ss.Put(ctx, stateRoot)
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = ss.Put(sblk)
+		err = ss.Put(ctx, sblk)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -175,7 +176,7 @@ func testSplitStore(t *testing.T, cfg *Config) {
 	}
 
 	// ensure our protected block is still there
-	has, err := hot.Has(protected.Cid())
+	has, err := hot.Has(ctx, protected.Cid())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +186,7 @@ func testSplitStore(t *testing.T, cfg *Config) {
 	}
 
 	// ensure our unprotected block is in the coldstore now
-	has, err = hot.Has(unprotected.Cid())
+	has, err = hot.Has(ctx, unprotected.Cid())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +195,7 @@ func testSplitStore(t *testing.T, cfg *Config) {
 		t.Fatal("unprotected block is still in hotstore")
 	}
 
-	has, err = cold.Has(unprotected.Cid())
+	has, err = cold.Has(ctx, unprotected.Cid())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +297,7 @@ func newMockStore() *mockStore {
 	return &mockStore{set: make(map[cid.Cid]blocks.Block)}
 }
 
-func (b *mockStore) Has(cid cid.Cid) (bool, error) {
+func (b *mockStore) Has(_ context.Context, cid cid.Cid) (bool, error) {
 	b.mx.Lock()
 	defer b.mx.Unlock()
 	_, ok := b.set[cid]
@@ -305,7 +306,7 @@ func (b *mockStore) Has(cid cid.Cid) (bool, error) {
 
 func (b *mockStore) HashOnRead(hor bool) {}
 
-func (b *mockStore) Get(cid cid.Cid) (blocks.Block, error) {
+func (b *mockStore) Get(_ context.Context, cid cid.Cid) (blocks.Block, error) {
 	b.mx.Lock()
 	defer b.mx.Unlock()
 
@@ -316,8 +317,8 @@ func (b *mockStore) Get(cid cid.Cid) (blocks.Block, error) {
 	return blk, nil
 }
 
-func (b *mockStore) GetSize(cid cid.Cid) (int, error) {
-	blk, err := b.Get(cid)
+func (b *mockStore) GetSize(ctx context.Context, cid cid.Cid) (int, error) {
+	blk, err := b.Get(ctx, cid)
 	if err != nil {
 		return 0, err
 	}
@@ -325,15 +326,15 @@ func (b *mockStore) GetSize(cid cid.Cid) (int, error) {
 	return len(blk.RawData()), nil
 }
 
-func (b *mockStore) View(cid cid.Cid, f func([]byte) error) error {
-	blk, err := b.Get(cid)
+func (b *mockStore) View(ctx context.Context, cid cid.Cid, f func([]byte) error) error {
+	blk, err := b.Get(ctx, cid)
 	if err != nil {
 		return err
 	}
 	return f(blk.RawData())
 }
 
-func (b *mockStore) Put(blk blocks.Block) error {
+func (b *mockStore) Put(_ context.Context, blk blocks.Block) error {
 	b.mx.Lock()
 	defer b.mx.Unlock()
 
@@ -341,7 +342,7 @@ func (b *mockStore) Put(blk blocks.Block) error {
 	return nil
 }
 
-func (b *mockStore) PutMany(blks []blocks.Block) error {
+func (b *mockStore) PutMany(_ context.Context, blks []blocks.Block) error {
 	b.mx.Lock()
 	defer b.mx.Unlock()
 
@@ -351,7 +352,7 @@ func (b *mockStore) PutMany(blks []blocks.Block) error {
 	return nil
 }
 
-func (b *mockStore) DeleteBlock(cid cid.Cid) error {
+func (b *mockStore) DeleteBlock(_ context.Context, cid cid.Cid) error {
 	b.mx.Lock()
 	defer b.mx.Unlock()
 
@@ -359,7 +360,7 @@ func (b *mockStore) DeleteBlock(cid cid.Cid) error {
 	return nil
 }
 
-func (b *mockStore) DeleteMany(cids []cid.Cid) error {
+func (b *mockStore) DeleteMany(_ context.Context, cids []cid.Cid) error {
 	b.mx.Lock()
 	defer b.mx.Unlock()
 
