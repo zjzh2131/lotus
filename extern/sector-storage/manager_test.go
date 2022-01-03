@@ -293,7 +293,7 @@ func TestSnapDeals(t *testing.T) {
 	}
 	vInfoJson, err := json.Marshal(vInfo)
 	require.NoError(t, err)
-	f, err := os.OpenFile("esu_proofs.njson", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile("esu_proofs.ndjson", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	require.NoError(t, err)
 	fmt.Fprintf(f, "%s\n", vInfoJson)
 	f.Sync()
