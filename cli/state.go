@@ -1239,9 +1239,10 @@ var compStateMsg = `
 
  {{define "gasC" -}}
  <td>{{.TotalGas}}{{template "virt" .TotalVirtualGas }}/{{.ComputeGas}}{{template "virt" .VirtualComputeGas}}/{{.StorageGas}}{{template "virt" .VirtualStorageGas}}</td>
- {{- end}}
+ {{- end }}
 
  {{range .GasCharges}}
+ {{- if or (ne .TotalGas 0) (ne .TotalVirtualGas 0) -}}
  <tr><td>{{.Name}}{{if .Extra}}:{{.Extra}}{{end}}</td>
  {{template "gasC" .}}
  <td>{{if PrintTiming}}{{.TimeTaken}}{{end}}</td>
@@ -1279,6 +1280,7 @@ var compStateMsg = `
    </details>
   {{end}}
   </td></tr>
+  {{- end -}}
   {{end}}
   {{with SumGas .GasCharges}}
   <tr class="sum"><td><b>Sum</b></td>
