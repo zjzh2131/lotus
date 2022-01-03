@@ -291,6 +291,10 @@ func TestSnapDeals(t *testing.T) {
 		NewSealedSectorCID:   out.NewSealed,
 		NewUnsealedSectorCID: out.NewUnsealed,
 	}
+	vInfoJson, err := json.Marshal(vInfo)
+	assert.NoError(t, err)
+
+	fmt.Printf("proof: %s\n", vInfoJson)
 	pass, err := ffiwrapper.ProofVerifier.VerifyReplicaUpdate(vInfo)
 	require.NoError(t, err)
 	assert.True(t, pass)
