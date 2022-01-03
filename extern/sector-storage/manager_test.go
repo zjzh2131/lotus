@@ -292,9 +292,13 @@ func TestSnapDeals(t *testing.T) {
 		NewUnsealedSectorCID: out.NewUnsealed,
 	}
 	vInfoJson, err := json.Marshal(vInfo)
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	f, err := os.OpenFile("esu_proofs.njson", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	require.NoError(t, err)
+	fmt.Fprintf(f, "%s\n", vInfoJson)
+	f.Sync()
+	f.Close()
 
-	fmt.Printf("proof: %s\n", vInfoJson)
 	pass, err := ffiwrapper.ProofVerifier.VerifyReplicaUpdate(vInfo)
 	require.NoError(t, err)
 	assert.True(t, pass)
