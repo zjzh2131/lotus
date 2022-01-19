@@ -726,6 +726,34 @@ func (sb *Sealer) ProveReplicaUpdate1(ctx context.Context, sector storage.Sector
 
 	updateProofType := abi.SealProofInfos[sector.ProofType].UpdateProof
 
+	log.Errorf("sealed path is %s", paths.Sealed)
+	s, err := os.Stat(paths.Sealed)
+	if err != nil {
+		return nil, err
+	}
+	log.Errorf("sealed size is %d", s.Size())
+
+	log.Errorf("sealed cache path is %s", paths.Cache)
+	s, err = os.Stat(paths.Cache)
+	if err != nil {
+		return nil, err
+	}
+	log.Errorf("sealed cache size is %d", s.Size())
+
+	log.Errorf("replica path is %s", paths.Update)
+	s, err = os.Stat(paths.Update)
+	if err != nil {
+		return nil, err
+	}
+	log.Errorf("replica size is %d", s.Size())
+
+	log.Errorf("replica cache path is %s", paths.UpdateCache)
+	s, err = os.Stat(paths.UpdateCache)
+	if err != nil {
+		return nil, err
+	}
+	log.Errorf("replica cache size is %d", s.Size())
+
 	vanillaProofs, err := ffi.SectorUpdate.GenerateUpdateVanillaProofs(updateProofType, sectorKey, newSealed, newUnsealed, paths.Update, paths.UpdateCache, paths.Sealed, paths.Cache)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to generate proof of replica update for sector %d: %w", sector.ID.Number, err)
