@@ -413,3 +413,11 @@ type LockedFunds struct {
 func (lf LockedFunds) TotalLockedFunds() abi.TokenAmount {
 	return big.Add(lf.VestingFunds, big.Add(lf.InitialPledgeRequirement, lf.PreCommitDeposits))
 }
+
+func AddLockedFunds(lf1, lf2 LockedFunds) LockedFunds {
+	return LockedFunds{
+		VestingFunds:             big.Add(lf1.VestingFunds, lf2.VestingFunds),
+		InitialPledgeRequirement: big.Add(lf1.InitialPledgeRequirement, lf2.InitialPledgeRequirement),
+		PreCommitDeposits:        big.Add(lf1.PreCommitDeposits, lf2.PreCommitDeposits),
+	}
+}
