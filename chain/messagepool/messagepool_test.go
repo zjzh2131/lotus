@@ -854,6 +854,7 @@ func TestMessageValueTooHigh(t *testing.T) {
 			Message:   *msg,
 			Signature: *sig,
 		}
+
 		err = mp.Add(context.TODO(), sm)
 		assert.Error(t, err)
 	}
@@ -924,27 +925,11 @@ func TestAddMessageTwice(t *testing.T) {
 	to := mock.Address(1001)
 
 	{
-		msg := &types.Message{
-			To:         to,
-			From:       from,
-			Value:      types.NewInt(1),
-			Nonce:      0,
-			GasLimit:   50000000,
-			GasFeeCap:  types.NewInt(minimumBaseFee.Uint64()),
-			GasPremium: types.NewInt(1),
-			Params:     make([]byte, 32<<10),
-		}
-
-		sig, err := w.WalletSign(context.TODO(), from, msg.Cid().Bytes(), api.MsgMeta{})
-		if err != nil {
-			panic(err)
-		}
-		sm := &types.SignedMessage{
-			Message:   *msg,
-			Signature: *sig,
-		}
+		// create a valid messages
+		sm := makeTestMessage(w, from, to, 0, 50_000_000, minimumBaseFee.Uint64())
 		mustAdd(t, mp, sm)
 
+		// try to add it twice
 		err = mp.Add(context.TODO(), sm)
 		assert.Contains(t, err.Error(), "with nonce 0 already in mpool")
 	}
@@ -970,25 +955,8 @@ func TestAddMessageTwiceNonceGap(t *testing.T) {
 	to := mock.Address(1001)
 
 	{
-		msg := &types.Message{
-			To:         to,
-			From:       from,
-			Value:      types.NewInt(1),
-			Nonce:      1,
-			GasLimit:   50000000,
-			GasFeeCap:  types.NewInt(minimumBaseFee.Uint64()),
-			GasPremium: types.NewInt(1),
-			Params:     make([]byte, 32<<10),
-		}
-
-		sig, err := w.WalletSign(context.TODO(), from, msg.Cid().Bytes(), api.MsgMeta{})
-		if err != nil {
-			panic(err)
-		}
-		sm := &types.SignedMessage{
-			Message:   *msg,
-			Signature: *sig,
-		}
+		// create message with invalid nonce (1)
+		sm := makeTestMessage(w, from, to, 1, 50_000_000, minimumBaseFee.Uint64())
 		mustAdd(t, mp, sm)
 
 		// then try to add message again
@@ -1016,51 +984,15 @@ func TestAddMessageTwiceCidDiff(t *testing.T) {
 	to := mock.Address(1001)
 
 	{
-		msg := &types.Message{
-			To:         to,
-			From:       from,
-			Value:      types.NewInt(1),
-			Nonce:      0,
-			GasLimit:   50000000,
-			GasFeeCap:  types.NewInt(minimumBaseFee.Uint64()),
-			GasPremium: types.NewInt(1),
-			Params:     make([]byte, 32<<10),
-		}
-
-		sig, err := w.WalletSign(context.TODO(), from, msg.Cid().Bytes(), api.MsgMeta{})
-		if err != nil {
-			panic(err)
-		}
-		sm := &types.SignedMessage{
-			Message:   *msg,
-			Signature: *sig,
-		}
+		sm := makeTestMessage(w, from, to, 0, 50_000_000, minimumBaseFee.Uint64())
 		mustAdd(t, mp, sm)
 
 		// Create message with different data, so CID is different
-		msg2 := &types.Message{
-			To:         to,
-			From:       from,
-			Value:      types.NewInt(2),
-			Nonce:      0,
-			GasLimit:   50000000,
-			GasFeeCap:  types.NewInt(minimumBaseFee.Uint64()),
-			GasPremium: types.NewInt(1),
-			Params:     make([]byte, 32<<10),
-		}
-
-		sig, err = w.WalletSign(context.TODO(), from, msg2.Cid().Bytes(), api.MsgMeta{})
-		if err != nil {
-			panic(err)
-		}
-		sm = &types.SignedMessage{
-			Message:   *msg2,
-			Signature: *sig,
-		}
+		sm2 := makeTestMessage(w, from, to, 0, 50_000_001, minimumBaseFee.Uint64())
 
 		//stm: @CHAIN_MEMPOOL_PUSH_001
 		// then try to add message again
-		err = mp.Add(context.TODO(), sm)
+		err = mp.Add(context.TODO(), sm2)
 		assert.Contains(t, err.Error(), "replace by fee has too low GasPremium")
 	}
 }
@@ -1085,49 +1017,11 @@ func TestAddMessageTwiceCidDiffReplaced(t *testing.T) {
 	to := mock.Address(1001)
 
 	{
-		msg := &types.Message{
-			To:         to,
-			From:       from,
-			Value:      types.NewInt(1),
-			Nonce:      0,
-			GasLimit:   50000000,
-			GasFeeCap:  types.NewInt(minimumBaseFee.Uint64()),
-			GasPremium: types.NewInt(1),
-			Params:     make([]byte, 32<<10),
-		}
-
-		sig, err := w.WalletSign(context.TODO(), from, msg.Cid().Bytes(), api.MsgMeta{})
-		if err != nil {
-			panic(err)
-		}
-		sm := &types.SignedMessage{
-			Message:   *msg,
-			Signature: *sig,
-		}
+		sm := makeTestMessage(w, from, to, 0, 50_000_000, minimumBaseFee.Uint64())
 		mustAdd(t, mp, sm)
 
 		// Create message with different data, so CID is different
-		msg2 := &types.Message{
-			To:        to,
-			From:      from,
-			Value:     types.NewInt(2),
-			Nonce:     0,
-			GasLimit:  50000000,
-			GasFeeCap: types.NewInt(minimumBaseFee.Uint64()),
-			// increase gas premium so the older message is overwritten
-			GasPremium: types.NewInt(msg.GasPremium.Uint64() * 2),
-			Params:     make([]byte, 32<<10),
-		}
-
-		sig, err = w.WalletSign(context.TODO(), from, msg2.Cid().Bytes(), api.MsgMeta{})
-		if err != nil {
-			panic(err)
-		}
-		sm = &types.SignedMessage{
-			Message:   *msg2,
-			Signature: *sig,
-		}
-
-		mustAdd(t, mp, sm)
+		sm2 := makeTestMessage(w, from, to, 0, 50_000_000, minimumBaseFee.Uint64()*2)
+		mustAdd(t, mp, sm2)
 	}
 }
