@@ -61,7 +61,7 @@ func TestMemPoolPushSingleNode(t *testing.T) {
 	}
 
 	// verify messages should be the ones included in the next block
-	selected, err := firstNode.MpoolSelect(ctx, types.EmptyTSK, 0)
+	selected, _ := firstNode.MpoolSelect(ctx, types.EmptyTSK, 0)
 	for _, msg := range sms {
 		found := false
 		for _, selectedMsg := range selected {
@@ -261,7 +261,7 @@ func TestMemPoolBatchPush(t *testing.T) {
 	}
 
 	// verify messages should be the ones included in the next block
-	selected, err := firstNode.MpoolSelect(ctx, types.EmptyTSK, 0)
+	selected, _ := firstNode.MpoolSelect(ctx, types.EmptyTSK, 0)
 	require.NoError(t, err)
 	for _, msg := range sms {
 		found := false
@@ -345,7 +345,7 @@ func TestMemPoolPushSingleNodeUntrusted(t *testing.T) {
 	}
 
 	// verify messages should be the ones included in the next block
-	selected, err := firstNode.MpoolSelect(ctx, types.EmptyTSK, 0)
+	selected, _ := firstNode.MpoolSelect(ctx, types.EmptyTSK, 0)
 	for _, msg := range sms {
 		found := false
 		for _, selectedMsg := range selected {
@@ -427,8 +427,7 @@ func TestMemPoolBatchPushUntrusted(t *testing.T) {
 	}
 
 	// verify messages should be the ones included in the next block
-	selected, err := firstNode.MpoolSelect(ctx, types.EmptyTSK, 0)
-	require.NoError(t, err)
+	selected, _ := firstNode.MpoolSelect(ctx, types.EmptyTSK, 0)
 	for _, msg := range sms {
 		found := false
 		for _, selectedMsg := range selected {
