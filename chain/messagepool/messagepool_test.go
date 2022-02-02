@@ -1025,3 +1025,37 @@ func TestAddMessageTwiceCidDiffReplaced(t *testing.T) {
 		mustAdd(t, mp, sm2)
 	}
 }
+
+func TestRemoveMessage(t *testing.T) {
+	//stm: @CHAIN_MEMPOOL_PUSH_001
+	tma := newTestMpoolAPI()
+
+	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
+	assert.NoError(t, err)
+
+	from, err := w.WalletNew(context.Background(), types.KTBLS)
+	assert.NoError(t, err)
+
+	tma.setBalance(from, 1000e9)
+
+	ds := datastore.NewMapDatastore()
+
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	assert.NoError(t, err)
+
+	to := mock.Address(1001)
+
+	{
+		sm := makeTestMessage(w, from, to, 0, 50_000_000, minimumBaseFee.Uint64())
+		mustAdd(t, mp, sm)
+
+		//stm: @CHAIN_MEMPOOL_REMOVE_001
+		// remove message for sender
+		mp.Remove(context.TODO(), from, sm.Message.Nonce, true)
+
+		//stm: @CHAIN_MEMPOOL_PENDING_FOR_001
+		// check messages in pool: should be none present
+		msgs := mp.pendingFor(context.TODO(), from)
+		assert.Len(t, msgs, 0)
+	}
+}
