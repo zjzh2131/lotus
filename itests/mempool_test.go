@@ -10,11 +10,8 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/itests/kit"
-	logging "github.com/ipfs/go-log/v2"
 	"github.com/stretchr/testify/require"
 )
-
-var log = logging.Logger("messagepool")
 
 func TestMemPoolPushSingleNode(t *testing.T) {
 	//stm: @CHAIN_MEMPOOL_CREATE_MSG_CHAINS_001, @CHAIN_MEMPOOL_SELECT_001
@@ -29,6 +26,7 @@ func TestMemPoolPushSingleNode(t *testing.T) {
 	sender := firstNode.DefaultKey.Address
 
 	addr, err := firstNode.WalletNew(ctx, types.KTBLS)
+	require.NoError(t, err)
 
 	const totalMessages = 10
 
@@ -103,8 +101,8 @@ func TestMemPoolPushTwoNodes(t *testing.T) {
 	sender := firstNode.DefaultKey.Address
 	sender2 := secondNode.DefaultKey.Address
 
-	addr, err := firstNode.WalletNew(ctx, types.KTBLS)
-	addr2, err := secondNode.WalletNew(ctx, types.KTBLS)
+	addr, _ := firstNode.WalletNew(ctx, types.KTBLS)
+	addr2, _ := secondNode.WalletNew(ctx, types.KTBLS)
 
 	bal, err := firstNode.WalletBalance(ctx, sender)
 	require.NoError(t, err)
@@ -175,7 +173,7 @@ func TestMemPoolClearPending(t *testing.T) {
 
 	sender := firstNode.DefaultKey.Address
 
-	addr, err := firstNode.WalletNew(ctx, types.KTBLS)
+	addr, _ := firstNode.WalletNew(ctx, types.KTBLS)
 
 	const totalMessages = 10
 
@@ -193,7 +191,8 @@ func TestMemPoolClearPending(t *testing.T) {
 	_, err = firstNode.MpoolPushMessage(ctx, msg, nil)
 	require.NoError(t, err)
 
-	firstNode.MpoolClear(ctx, true)
+	err = firstNode.MpoolClear(ctx, true)
+	require.NoError(t, err)
 
 	// pool should be empty now
 	pending, err := firstNode.MpoolPending(context.TODO(), types.EmptyTSK)
@@ -220,7 +219,7 @@ func TestMemPoolBatchPush(t *testing.T) {
 
 	sender := firstNode.DefaultKey.Address
 
-	addr, err := firstNode.WalletNew(ctx, types.KTBLS)
+	addr, _ := firstNode.WalletNew(ctx, types.KTBLS)
 
 	const totalMessages = 10
 
@@ -303,7 +302,7 @@ func TestMemPoolPushSingleNodeUntrusted(t *testing.T) {
 
 	sender := firstNode.DefaultKey.Address
 
-	addr, err := firstNode.WalletNew(ctx, types.KTBLS)
+	addr, _ := firstNode.WalletNew(ctx, types.KTBLS)
 
 	const totalMessages = 10
 
@@ -386,7 +385,7 @@ func TestMemPoolBatchPushUntrusted(t *testing.T) {
 
 	sender := firstNode.DefaultKey.Address
 
-	addr, err := firstNode.WalletNew(ctx, types.KTBLS)
+	addr, _ := firstNode.WalletNew(ctx, types.KTBLS)
 
 	const totalMessages = 10
 
