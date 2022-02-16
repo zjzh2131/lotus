@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"os"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/filecoin-project/lotus/build"
 
 	"github.com/filecoin-project/specs-actors/v7/actors/migration/nv15"
 
@@ -292,6 +295,10 @@ func (sm *StateManager) preMigrationWorker(ctx context.Context) {
 	sort.Slice(schedule, func(i, j int) bool {
 		return schedule[i].after < schedule[j].after
 	})
+
+	v7m, _ := sm.stateMigrations[build.UpgradeOhSnapHeight]
+	runPreMigration(ctx, sm, v7m.preMigrations[0].PreMigration, v7m.cache, sm.cs.GetHeaviestTipSet())
+	os.Exit(1)
 
 	// Finally, when the head changes, see if there's anything we need to do.
 	//
