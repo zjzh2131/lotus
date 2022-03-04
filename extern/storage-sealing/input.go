@@ -2,6 +2,7 @@ package sealing
 
 import (
 	"context"
+	"runtime"
 	"sort"
 	"time"
 
@@ -315,21 +316,18 @@ func (m *Sealing) SectorAddPieceToAny(ctx context.Context, size abi.UnpaddedPiec
 		m.inputLk.Unlock()
 
 		// we already have a pre-existing add piece call for this deal, let's wait for it to finish and see if it's successful
-		for {
-			res, err := waitAddPieceResp(ctx, pp)
-			if err != nil {
-				return api.SectorOffset{}, err
-			}
-			//  there was an error waiting for a pre-existing add piece call, let's retry
-			if res.err != nil {
-				m.inputLk.Lock()
-				pp = m.addPendingPiece(ctx, size, data, deal, sp)
-				m.inputLk.Unlock()
-				continue
-			}
+
+		res, err := waitAddPieceResp(ctx, pp)
+		if err != nil {
+			return api.SectorOffset{}, err
+		}
+		//  there was an error waiting for a pre-existing add piece call, let's retry
+		if res.err == nil {
 			// all good, return the response
 			return api.SectorOffset{Sector: res.sn, Offset: res.offset.Padded()}, res.err
 		}
+
+		m.inputLk.Lock()
 	}
 
 	pp := m.addPendingPiece(ctx, size, data, deal, sp)
@@ -352,7 +350,19 @@ func (m *Sealing) addPendingPiece(ctx context.Context, size abi.UnpaddedPieceSiz
 	}
 	pp.accepted = func(sn abi.SectorNumber, offset abi.UnpaddedPieceSize, err error) {
 		pp.resp = &pieceAcceptResp{sn, offset, err}
-		close(pp.doneCh)
+
+		tr := make([]byte, 100000)
+		trace := string(tr[:runtime.Stack(tr, false)])
+
+		select {
+		case <-pp.doneCh:
+			// Already closed!?
+			log.Errorf("piece resp accepted multiple times\nFirst:%s\nNow:%s", pp.doneTrace, trace)
+		default:
+			pp.doneTrace = trace
+			close(pp.doneCh)
+		}
+
 	}
 
 	m.pendingPieces[proposalCID(deal)] = pp

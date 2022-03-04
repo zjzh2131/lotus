@@ -147,8 +147,9 @@ type pieceAcceptResp struct {
 }
 
 type pendingPiece struct {
-	doneCh chan struct{}
-	resp   *pieceAcceptResp
+	doneCh    chan struct{}
+	resp      *pieceAcceptResp
+	doneTrace string
 
 	size abi.UnpaddedPieceSize
 	deal api.PieceDealInfo
