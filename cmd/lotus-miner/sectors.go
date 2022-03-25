@@ -145,6 +145,7 @@ var sectorsStatusCmd = &cli.Command{
 			fmt.Printf("Proof:\t\t%x\n", status.Proof)
 		}
 		fmt.Printf("Deals:\t\t%v\n", status.Deals)
+		fmt.Printf("Pieces:\t\t%v\n", status.Pieces)
 		fmt.Printf("Retries:\t%d\n", status.Retries)
 		if status.LastErr != "" {
 			fmt.Printf("Last Error:\t\t%s\n", status.LastErr)
