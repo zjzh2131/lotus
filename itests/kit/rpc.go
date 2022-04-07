@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/filecoin-project/lotus/api/client"
 	"github.com/filecoin-project/lotus/node"
@@ -22,13 +23,32 @@ func CreateRPCServer(t *testing.T, handler http.Handler, listener net.Listener) 
 	}
 	testServ.Start()
 
-	t.Cleanup(testServ.Close)
+	t.Cleanup(func() {
+		waitUpTo(testServ.Close, time.Second, "Gave up waiting for RPC server to close after 1s")
+	})
 	t.Cleanup(testServ.CloseClientConnections)
 
 	addr := testServ.Listener.Addr()
 	maddr, err := manet.FromNetAddr(addr)
 	require.NoError(t, err)
 	return testServ, maddr
+}
+
+func waitUpTo(fn func(), waitTime time.Duration, errMsg string) {
+	ch := make(chan struct{})
+	go func() {
+		fn()
+		close(ch)
+	}()
+
+	timer := time.NewTimer(waitTime)
+	defer timer.Stop()
+	select {
+	case <-ch:
+	case <-timer.C:
+		fmt.Println(errMsg)
+		return
+	}
 }
 
 func fullRpc(t *testing.T, f *TestFullNode) *TestFullNode {
