@@ -1062,6 +1062,7 @@ workflows:
             tags:
               only:
                 - /^v\d+\.\d+\.\d+(-rc\d+)?$/
+      - publish-packer-snap
 
   nightly:
     triggers:
