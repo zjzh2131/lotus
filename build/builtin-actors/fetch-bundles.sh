@@ -20,7 +20,7 @@ check() {
     file=$1
     hash=$2
     if [ -e "$file" ]; then
-        file_hash=$(sha256sum "$file" | cut -d ' ' -f 1)
+        file_hash=$(shasum -a 256 "$file" | cut -d ' ' -f 1)
         if [ "$file_hash" == "$hash" ]; then
             return 0
         else
