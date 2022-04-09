@@ -60,6 +60,28 @@ const (
 	MaxPreCommitRandomnessLookback = builtin8.EpochsInDay + SealRandomnessLookback
 )
 
+// OverridePolicyFVM, when true, suggests to Lotus that the FVM policy should be overridden.
+var OverridePolicyFVM = false
+
+// FvmActorsPolicyOverride holds overrides that will be applied to FVM actors
+// if OverridePolicyFVM = true. This object is serialized into JSON and passed
+// to the FVM's environment.
+var FvmActorsPolicyOverride = struct {
+	PreCommitSealProofTypes map[abi.RegisteredSealProof]struct{}       `json:"precommit_seal_proof_types,omitempty"`
+	WindowPoStProofTypes    map[abi.RegisteredPoStProof]struct{}       `json:"window_proof_types,omitempty"`
+	PreCommitChallengeDelay *abi.ChainEpoch                            `json:"precommit_challenge_delay,omitempty"`
+	ConsensusMinerMinPower  *abi.StoragePower                          `json:"consensus_miner_min_power,omitempty"`
+	MinVerifiedDealSize     *abi.StoragePower                          `json:"min_verified_deal_size,omitempty"`
+	MaxProveCommitDuration  map[abi.RegisteredSealProof]abi.ChainEpoch `json:"max_prove_commit_duration,omitempty"`
+
+	WPoStChallengeWindow *abi.ChainEpoch `json:"wpost_challenge_window,omitempty"`
+	WPoStProvingPeriod   *abi.ChainEpoch `json:"wpost_proving_period,omitempty"`
+	WPoStDisputeWindow   *abi.ChainEpoch `json:"wpost_dispute_window,omitempty"`
+
+	ProviderCollateralSupplyTargetNum   *uint64 `json:"provider_collateral_supply_target_num,omitempty"`
+	ProviderCollateralSupplyTargetDenom *uint64 `json:"provider_collateral_supply_target_denom,omitempty"`
+}{}
+
 // SetSupportedProofTypes sets supported proof types, across all actor versions.
 // This should only be used for testing.
 func SetSupportedProofTypes(types ...abi.RegisteredSealProof) {
@@ -85,6 +107,9 @@ func SetSupportedProofTypes(types ...abi.RegisteredSealProof) {
 	miner7.PreCommitSealProofTypesV8 = make(map[abi.RegisteredSealProof]struct{}, len(types))
 
 	miner8.PreCommitSealProofTypesV8 = make(map[abi.RegisteredSealProof]struct{}, len(types))
+
+	FvmActorsPolicyOverride.PreCommitSealProofTypes = make(map[abi.RegisteredSealProof]struct{}, len(types))
+	FvmActorsPolicyOverride.WindowPoStProofTypes = make(map[abi.RegisteredPoStProof]struct{}, len(types))
 
 	AddSupportedProofTypes(types...)
 }
@@ -151,6 +176,14 @@ func AddSupportedProofTypes(types ...abi.RegisteredSealProof) {
 
 		miner8.WindowPoStProofTypes[wpp] = struct{}{}
 
+		FvmActorsPolicyOverride.PreCommitSealProofTypes[t+abi.RegisteredSealProof_StackedDrg2KiBV1_1] = struct{}{}
+		wpp, err = t.RegisteredWindowPoStProof()
+		if err != nil {
+			// Fine to panic, this is a test-only method
+			panic(err)
+		}
+
+		FvmActorsPolicyOverride.WindowPoStProofTypes[wpp] = struct{}{}
 	}
 }
 
@@ -174,6 +207,8 @@ func SetPreCommitChallengeDelay(delay abi.ChainEpoch) {
 	miner7.PreCommitChallengeDelay = delay
 
 	miner8.PreCommitChallengeDelay = delay
+
+	FvmActorsPolicyOverride.PreCommitChallengeDelay = &delay
 
 }
 
@@ -217,6 +252,7 @@ func SetConsensusMinerMinPower(p abi.StoragePower) {
 		policy.ConsensusMinerMinPower = p
 	}
 
+	FvmActorsPolicyOverride.ConsensusMinerMinPower = &p
 }
 
 // SetMinVerifiedDealSize sets the minimum size of a verified deal. This should
@@ -239,6 +275,7 @@ func SetMinVerifiedDealSize(size abi.StoragePower) {
 
 	verifreg8.MinVerifiedDealSize = size
 
+	FvmActorsPolicyOverride.MinVerifiedDealSize = &size
 }
 
 func GetMaxProveCommitDuration(ver actors.Version, t abi.RegisteredSealProof) (abi.ChainEpoch, error) {
@@ -321,6 +358,9 @@ func SetProviderCollateralSupplyTarget(num, denom big.Int) {
 		Denominator: denom,
 	}
 
+	n, d := num.Uint64(), denom.Uint64()
+	FvmActorsPolicyOverride.ProviderCollateralSupplyTargetNum = &n
+	FvmActorsPolicyOverride.ProviderCollateralSupplyTargetDenom = &d
 }
 
 func DealProviderCollateralBounds(
@@ -435,6 +475,12 @@ func SetWPoStChallengeWindow(period abi.ChainEpoch) {
 	// scale it if we're scaling the challenge period.
 	miner8.WPoStDisputeWindow = period * 30
 
+	provingPeriod := period * abi.ChainEpoch(miner8.WPoStPeriodDeadlines)
+	disputeWindow := period * 30
+
+	FvmActorsPolicyOverride.WPoStChallengeWindow = &period
+	FvmActorsPolicyOverride.WPoStProvingPeriod = &provingPeriod
+	FvmActorsPolicyOverride.WPoStDisputeWindow = &disputeWindow
 }
 
 func GetWinningPoStSectorSetLookback(nwVer network.Version) abi.ChainEpoch {
