@@ -19,7 +19,7 @@ import (
 const BootstrappersFile = "interopnet.pi"
 const GenesisFile = "interopnet.car"
 
-const GenesisNetworkVersion = network.Version13
+const GenesisNetworkVersion = network.Version15
 
 var UpgradeBreezeHeight = abi.ChainEpoch(-1)
 
@@ -93,6 +93,8 @@ func init() {
 	UpgradeNorwegianHeight = getUpgradeHeight("LOTUS_NORWEGIAN_HEIGHT", UpgradeNorwegianHeight)
 	UpgradeTurboHeight = getUpgradeHeight("LOTUS_ACTORSV4_HEIGHT", UpgradeTurboHeight)
 	UpgradeHyperdriveHeight = getUpgradeHeight("LOTUS_HYPERDRIVE_HEIGHT", UpgradeHyperdriveHeight)
+	UpgradeChocolateHeight = getUpgradeHeight("LOTUS_CHOCOLATE_HEIGHT", UpgradeChocolateHeight)
+	UpgradeOhSnapHeight = getUpgradeHeight("LOTUS_OHSNAP_HEIGHT", UpgradeOhSnapHeight)
 
 	BuildType |= BuildInteropnet
 	SetAddressNetwork(address.Testnet)
