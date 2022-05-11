@@ -15,6 +15,7 @@
   * [ChainCheckBlockstore](#ChainCheckBlockstore)
   * [ChainDeleteObj](#ChainDeleteObj)
   * [ChainExport](#ChainExport)
+  * [ChainExportRange](#ChainExportRange)
   * [ChainGetBlock](#ChainGetBlock)
   * [ChainGetBlockMessages](#ChainGetBlockMessages)
   * [ChainGetGenesis](#ChainGetGenesis)
@@ -431,6 +432,36 @@ Inputs:
 [
   10101,
   true,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response: `"Ynl0ZSBhcnJheQ=="`
+
+### ChainExportRange
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  true,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ],
   [
     {
       "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
