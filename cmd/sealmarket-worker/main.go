@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/filecoin-project/go-address"
 	"net"
 	"net/http"
 	"os"
@@ -25,7 +26,6 @@ import (
 	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
 	"github.com/filecoin-project/lotus/lib/lotuslog"
-	"github.com/filecoin-project/lotus/lib/ulimit"
 	"github.com/filecoin-project/lotus/metrics"
 	"github.com/filecoin-project/lotus/node/repo"
 )
@@ -54,7 +54,7 @@ func main() {
 			&cli.StringFlag{
 				Name:    FlagSealmarketRepo,
 				EnvVars: []string{"SEALMARKET_PATH"},
-				Value:   "~/.sealmarket", // TODO: Consider XDG_DATA_HOME
+				Value:   "~/.sealmarket-worker", // TODO: Consider XDG_DATA_HOME
 			},
 			&cli.StringFlag{
 				Name:    "panic-reports",
@@ -68,6 +68,12 @@ func main() {
 				EnvVars: []string{"LOTUS_MINER_PATH", "LOTUS_STORAGE_PATH"},
 				Value:   "~/.lotusminer", // TODO: Consider XDG_DATA_HOME
 				Usage:   fmt.Sprintf("Specify miner repo path. flag storagerepo and env LOTUS_STORAGE_PATH are DEPRECATION, will REMOVE SOON"),
+			},
+			&cli.StringFlag{
+				Name:    "repo",
+				EnvVars: []string{"LOTUS_PATH"},
+				Value:   "~/.lotus",
+				Usage:   fmt.Sprintf("Specify lotus node path."),
 			},
 		},
 
@@ -108,6 +114,15 @@ var runCmd = &cli.Command{
 			Usage: "used when 'listen' is unspecified. must be a valid duration recognized by golang's time.ParseDuration function",
 			Value: "30m",
 		},
+		&cli.StringFlag{
+			Name:  "wallet",
+			Usage: "specify wallet to pay for proof services from",
+		},
+		&cli.StringFlag{
+			Name:  "libp2p-listen",
+			Usage: "host address and port the worker p2p will listen on",
+			Value: "/ip4/0.0.0.0/tcp/6377",
+		},
 	},
 	Before: func(cctx *cli.Context) error {
 		if cctx.IsSet("address") {
@@ -122,24 +137,13 @@ var runCmd = &cli.Command{
 	Action: func(cctx *cli.Context) error {
 		log.Info("Starting seal market client")
 
-		limit, _, err := ulimit.GetLimit()
-		switch {
-		case err == ulimit.ErrUnsupported:
-			log.Errorw("checking file descriptor limit failed", "error", err)
-		case err != nil:
-			return xerrors.Errorf("checking fd limit: %w", err)
-		default:
-			if limit < build.MinerFDLimit {
-				return xerrors.Errorf("soft file descriptor limit (ulimit -n) too low, want %d, current %d", build.MinerFDLimit, limit)
-			}
-		}
-
 		// Connect to storage-miner
 		ctx := lcli.ReqContext(cctx)
 
 		var nodeApi api.StorageMiner
 		var closer func()
 		for {
+			var err error
 			nodeApi, closer, err = lcli.GetStorageMinerAPI(cctx, cliutil.StorageMinerUseHttp)
 			if err == nil {
 				_, err = nodeApi.Version(ctx)
@@ -153,6 +157,25 @@ var runCmd = &cli.Command{
 		}
 
 		defer closer()
+
+		var fullNodeApi api.FullNode
+		var lcloser func()
+		for {
+			var err error
+			fullNodeApi, closer, err = lcli.GetFullNodeAPIV1(cctx) // todo use http
+			if err == nil {
+				_, err = fullNodeApi.Version(ctx)
+				if err == nil {
+					break
+				}
+			}
+			fmt.Printf("\r\x1b[0KConnecting to full node API... (%s)", err)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		defer lcloser()
+
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
@@ -171,6 +194,24 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("lotus-miner API version doesn't match: expected: %s", api.APIVersion{APIVersion: api.MinerAPIVersion0})
 		}
 		log.Infof("Remote version %s", v)
+
+		var addr address.Address
+		if w := cctx.String("wallet"); w != "" {
+			a, err := address.NewFromString(w)
+			if err != nil {
+				return err
+			}
+
+			addr = a
+		}
+		if addr == address.Undef {
+			defaddr, err := fullNodeApi.WalletDefaultAddress(ctx)
+			if err != nil {
+				return err
+			}
+
+			addr = defaddr
+		}
 
 		// Check params
 
@@ -260,11 +301,11 @@ var runCmd = &cli.Command{
 		// Create / expose the worker
 
 		// TODO real fake url
-		discovery := "www.fake.com/fake/fake"
+		discovery := "https://gist.githubusercontent.com/magik6k/e154ec350e9d1346141de50311160c85/raw/eb04a10108036e3abd2e7ff452e9045f175e6964/local.pi"
 		if err != nil {
 			panic(err)
 		}
-		wc, err := sealmarket.NewWorkerCalls(cctx.Context, discovery)
+		wc, err := sealmarket.NewWorkerCalls(cctx.Context, fullNodeApi, nodeApi, addr, discovery, cctx.String("libp2p-listen"))
 		if err != nil {
 			panic(err)
 		}

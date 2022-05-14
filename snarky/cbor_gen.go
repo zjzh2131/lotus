@@ -8,6 +8,7 @@ import (
 	"math"
 	"sort"
 
+	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
 	paych "github.com/filecoin-project/specs-actors/actors/builtin/paych"
 	cid "github.com/ipfs/go-cid"
@@ -176,7 +177,7 @@ func (t *PriceResponse) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{165}); err != nil {
+	if _, err := w.Write([]byte{164}); err != nil {
 		return err
 	}
 
@@ -211,22 +212,6 @@ func (t *PriceResponse) MarshalCBOR(w io.Writer) error {
 	}
 
 	if err := t.Price.MarshalCBOR(w); err != nil {
-		return err
-	}
-
-	// t.Addr (address.Address) (struct)
-	if len("Addr") > cbg.MaxLength {
-		return xerrors.Errorf("Value in field \"Addr\" was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Addr"))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string("Addr")); err != nil {
-		return err
-	}
-
-	if err := t.Addr.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -332,23 +317,23 @@ func (t *PriceResponse) UnmarshalCBOR(r io.Reader) error {
 				}
 
 			}
-			// t.Addr (address.Address) (struct)
-		case "Addr":
-
-			{
-
-				if err := t.Addr.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("unmarshaling t.Addr: %w", err)
-				}
-
-			}
 			// t.Address (address.Address) (struct)
 		case "Address":
 
 			{
 
-				if err := t.Address.UnmarshalCBOR(br); err != nil {
-					return xerrors.Errorf("unmarshaling t.Address: %w", err)
+				b, err := br.ReadByte()
+				if err != nil {
+					return err
+				}
+				if b != cbg.CborNull[0] {
+					if err := br.UnreadByte(); err != nil {
+						return err
+					}
+					t.Address = new(address.Address)
+					if err := t.Address.UnmarshalCBOR(br); err != nil {
+						return xerrors.Errorf("unmarshaling t.Address pointer: %w", err)
+					}
 				}
 
 			}

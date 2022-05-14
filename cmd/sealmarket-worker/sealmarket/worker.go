@@ -3,6 +3,8 @@ package sealmarket
 import (
 	"bytes"
 	"context"
+	cborutil "github.com/filecoin-project/go-cbor-util"
+	"github.com/libp2p/go-libp2p"
 	"sort"
 
 	"time"
@@ -29,12 +31,22 @@ var log = logging.Logger("sealmarket")
 const PollingInterval = time.Minute
 
 // TODO pass in host
-func NewWorkerCalls(ctx context.Context, totallyDecentralizedURL string) (*WorkerCalls, error) {
-	providers, err := DiscoverProviders(ctx, totallyDecentralizedURL)
+func NewWorkerCalls(ctx context.Context, chain api.FullNode, ret storiface.WorkerReturn, client addr.Address, discoveryUrl, p2plisten string) (*WorkerCalls, error) {
+	host, err := libp2p.New(libp2p.ListenAddrStrings(p2plisten))
+	if err != nil {
+		return nil, err
+	}
+	providers, err := DiscoverProviders(ctx, discoveryUrl, host)
 	if err != nil {
 		return nil, err
 	}
 	return &WorkerCalls{
+		chain: chain,
+		ret:   ret,
+
+		host:       host,
+		clientAddr: client,
+
 		providers: providers,
 	}, nil
 }
@@ -117,23 +129,16 @@ func (p *provider) queryPrice(ctx context.Context, h host.Host, spt abi.Register
 		return nil, xerrors.Errorf("closing stream write: %w", err)
 	}
 
-	var resp [1024]byte
-
-	n, err := stream.Read(resp[:])
-	if err != nil {
-		return nil, xerrors.Errorf("read resp: %w", err)
-	}
-
-	if n == 1024 {
-		return nil, xerrors.Errorf("response too long")
-	}
 	var res snarky.PriceResponse
-	if err := res.UnmarshalCBOR(bytes.NewReader(resp[:])); err != nil {
-		return nil, xerrors.Errorf("unmarshal: %w", err)
+	if err := cborutil.ReadCborRPC(stream, &res); err != nil {
+		return nil, xerrors.Errorf("read resp: %w", err)
 	}
 
 	if !res.Accept {
 		return &res, xerrors.Errorf("not accepted: '%s'", res.Error) // todo safe string?
+	}
+	if res.Address == nil {
+		return nil, xerrors.Errorf("nil addr in response")
 	}
 
 	return &res, nil
@@ -178,19 +183,9 @@ func (p *provider) requestWork(ctx context.Context, h host.Host, sector storage.
 		return "", xerrors.Errorf("closing stream write: %w", err)
 	}
 
-	var resp [1024]byte
-
-	n, err := stream.Read(resp[:])
-	if err != nil {
-		return "", xerrors.Errorf("read resp: %w", err)
-	}
-
-	if n == 1024 {
-		return "", xerrors.Errorf("response too long")
-	}
 	var res snarky.WorkResponse
-	if err := res.UnmarshalCBOR(bytes.NewReader(resp[:])); err != nil {
-		return "", xerrors.Errorf("unmarshal: %w", err)
+	if err := cborutil.ReadCborRPC(stream, &res); err != nil {
+		return "", xerrors.Errorf("read resp: %w", err)
 	}
 
 	if res.Error != "" {
@@ -237,19 +232,9 @@ func (p *provider) requestStatus(ctx context.Context, h host.Host, job snarky.Jo
 		return nil, xerrors.Errorf("closing stream write: %w", err)
 	}
 
-	var resp [102400]byte
-
-	n, err := stream.Read(resp[:])
-	if err != nil {
-		return nil, xerrors.Errorf("read resp: %w", err)
-	}
-
-	if n == 102400 {
-		return nil, xerrors.Errorf("response too long")
-	}
 	var res snarky.StatusResponse
-	if err := res.UnmarshalCBOR(bytes.NewReader(resp[:])); err != nil {
-		return nil, xerrors.Errorf("unmarshal: %w", err)
+	if err := cborutil.ReadCborRPC(stream, &res); err != nil {
+		return nil, xerrors.Errorf("read resp: %w", err)
 	}
 
 	return &res, nil
@@ -276,12 +261,12 @@ func (w *WorkerCalls) SealCommit2(ctx context.Context, sector storage.SectorRef,
 			break
 		}
 
-		log.Warnw("failed to query provider", "prov", prov.peer.ID, "err", err)
+		log.Warnw("failed to query provider", "prov", p.peer.ID, "err", err)
 	}
 
 	log.Infow("commit2 provider selected", "provider", prov.peer.ID, "price", types.FIL(ask.Price))
 
-	pch, err := w.chain.PaychGet(ctx, w.clientAddr, ask.Addr, ask.Price, api.PaychGetOpts{OffChain: true})
+	pch, err := w.chain.PaychGet(ctx, w.clientAddr, *ask.Address, ask.Price, api.PaychGetOpts{OffChain: true})
 	if err != nil {
 		// todo disable provider + try other providers
 		return storiface.CallID{}, xerrors.Errorf("getting payment channel: %w", err)

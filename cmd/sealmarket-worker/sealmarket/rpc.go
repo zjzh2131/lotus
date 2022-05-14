@@ -3,6 +3,7 @@ package sealmarket
 import (
 	"context"
 	"net/http"
+	"os"
 	"sync/atomic"
 
 	"github.com/google/uuid"
@@ -67,8 +68,26 @@ func (w *Worker) Paths(ctx context.Context) ([]storiface.StoragePath, error) {
 }
 
 func (w *Worker) Info(ctx context.Context) (storiface.WorkerInfo, error) {
-	//TODO implement me
-	panic("implement me")
+	resEnv, err := storiface.ParseResourceEnv(func(key, def string) (string, bool) {
+		return os.LookupEnv(key)
+	})
+	if err != nil {
+		return storiface.WorkerInfo{}, xerrors.Errorf("interpreting resource env vars: %w", err)
+	}
+
+	return storiface.WorkerInfo{
+		Hostname:        "sealmarket",
+		IgnoreResources: true,
+		Resources: storiface.WorkerResources{
+			MemPhysical: 0,
+			MemUsed:     0,
+			MemSwap:     0,
+			MemSwapUsed: 0,
+			CPUs:        0,
+			GPUs:        nil,
+			Resources:   resEnv,
+		},
+	}, nil
 }
 
 func (w *Worker) TaskDisable(ctx context.Context, tt sealtasks.TaskType) error {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"os"
 	"time"
 
@@ -60,7 +61,7 @@ func main() {
 				Usage:   fmt.Sprintf("Specify miner repo path. flag storagerepo and env LOTUS_STORAGE_PATH are DEPRECATION, will REMOVE SOON"),
 			},
 			&cli.StringFlag{
-				Name:    "lotus-repo",
+				Name:    "repo",
 				EnvVars: []string{"LOTUS_PATH"},
 				Value:   "~/.lotus",
 				Usage:   fmt.Sprintf("Specify lotus node path."),
@@ -227,8 +228,15 @@ var runCmd = &cli.Command{
 			return err
 		}
 
+		addrs, err := peer.AddrInfoToP2pAddrs(&peer.AddrInfo{
+			ID:    host.ID(),
+			Addrs: host.Addrs(),
+		})
+		if err != nil {
+			return xerrors.Errorf("getting addrs: %w", err)
+		}
 		fmt.Println("---- BEGIN PROVIDER ADDRS ----")
-		for _, multiaddr := range host.Addrs() {
+		for _, multiaddr := range addrs {
 			fmt.Println(multiaddr)
 		}
 		fmt.Println("---- END PROVIDER ADDRS ----")

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/filecoin-project/go-address"
-	addr "github.com/filecoin-project/go-address"
 	cborutil "github.com/filecoin-project/go-cbor-util"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
@@ -94,10 +93,8 @@ type PriceResponse struct {
 	// Accept denotes whether or not the prover is even considering this type of request
 	Accept bool
 
-	Price abi.TokenAmount
-	Addr  addr.Address
-
-	Address address.Address
+	Price   abi.TokenAmount
+	Address *address.Address
 
 	Error string
 }
@@ -128,7 +125,7 @@ func (ps *ProvingService) HandlePriceRequest(req *PriceRequest) *PriceResponse {
 	return &PriceResponse{
 		Price:   price,
 		Accept:  accept,
-		Address: ps.addr,
+		Address: &ps.addr,
 	}
 }
 

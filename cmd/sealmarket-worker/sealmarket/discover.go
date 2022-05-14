@@ -2,9 +2,11 @@ package sealmarket
 
 import (
 	"context"
+	"github.com/libp2p/go-libp2p-core/host"
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/filecoin-project/lotus/lib/addrutil"
 )
@@ -16,8 +18,8 @@ import (
 //
 // Probably we could also lift lotus dht peer discovery mechanism too
 
-func DiscoverProviders(ctx context.Context, totallyDecentralizedURL string) ([]provider, error) {
-	resp, err := http.Get(totallyDecentralizedURL)
+func DiscoverProviders(ctx context.Context, discoveryUrl string, host host.Host) ([]provider, error) {
+	resp, err := http.Get(discoveryUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -33,8 +35,10 @@ func DiscoverProviders(ctx context.Context, totallyDecentralizedURL string) ([]p
 	if err != nil {
 		return nil, err
 	}
+
 	ret := make([]provider, 0)
 	for _, p := range addrInfos {
+		host.Peerstore().SetAddrs(p.ID, p.Addrs, 240*time.Hour)
 		ret = append(ret, provider{
 			peer: p,
 		})
