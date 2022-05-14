@@ -3,26 +3,25 @@ package sealmarket
 import (
 	"bytes"
 	"context"
-	addr "github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/google/uuid"
 	"sort"
 
-	"github.com/filecoin-project/lotus/snarky"
-	"github.com/filecoin-project/specs-actors/actors/builtin/paych"
-	logging "github.com/ipfs/go-log/v2"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"golang.org/x/xerrors"
 	"time"
 
 	"github.com/ipfs/go-cid"
 
+	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
+	"github.com/filecoin-project/lotus/snarky"
 	"github.com/filecoin-project/specs-actors/actors/runtime/proof"
 	"github.com/filecoin-project/specs-storage/storage"
+	"github.com/google/uuid"
+	logging "github.com/ipfs/go-log/v2"
+	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/xerrors"
 )
 
 var log = logging.Logger("sealmarket")
@@ -102,7 +101,8 @@ func (p *provider) queryPrice(ctx context.Context, h host.Host, spt abi.Register
 	}()
 
 	req := &snarky.PriceRequest{
-		ProofType: spt,
+		ProofClass: snarky.ProofClassProveCommit,
+		ProofType:  int64(spt),
 	}
 	var rb bytes.Buffer
 	if err := req.MarshalCBOR(&rb); err != nil {
@@ -139,7 +139,7 @@ func (p *provider) queryPrice(ctx context.Context, h host.Host, spt abi.Register
 	return &res, nil
 }
 
-func (p *provider) requestWork(ctx context.Context, h host.Host, sector storage.SectorRef, c1o storage.Commit1Out, payment *paych.SignedVoucher) (snarky.JobID, error) {
+func (p *provider) requestWork(ctx context.Context, h host.Host, sector storage.SectorRef, c1o storage.Commit1Out, payment snarky.PaymentData) (snarky.JobID, error) {
 	ctx, done := context.WithTimeout(ctx, 120*time.Second)
 	defer done()
 
@@ -159,7 +159,7 @@ func (p *provider) requestWork(ctx context.Context, h host.Host, sector storage.
 	}()
 
 	req := &snarky.WorkRequest{
-		Payment: payment,
+		Payment: &payment,
 		ProveCommitRequest: &snarky.ProveCommitRequest{
 			Sector: snarky.RefFormNative(sector),
 			C1o:    c1o,
@@ -298,7 +298,12 @@ func (w *WorkerCalls) SealCommit2(ctx context.Context, sector storage.SectorRef,
 		return storiface.CallID{}, xerrors.Errorf("creating payment voucher: %w", err)
 	}
 
-	jobId, err := prov.requestWork(ctx, w.host, sector, c1o, v.Voucher)
+	paymentData := snarky.PaymentData{
+		From:    w.clientAddr,
+		Voucher: v.Voucher,
+	}
+
+	jobId, err := prov.requestWork(ctx, w.host, sector, c1o, paymentData)
 	if err != nil {
 		return storiface.CallID{}, xerrors.Errorf("requesting work: %w", err)
 	}
