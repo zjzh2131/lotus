@@ -16,6 +16,7 @@
   * [CheckProvable](#CheckProvable)
 * [Compute](#Compute)
   * [ComputeDataCid](#ComputeDataCid)
+  * [ComputePoRep](#ComputePoRep)
   * [ComputeProof](#ComputeProof)
   * [ComputeWindowPoSt](#ComputeWindowPoSt)
 * [Create](#Create)
@@ -385,6 +386,27 @@ Response:
   }
 }
 ```
+
+### ComputePoRep
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "ID": {
+      "Miner": 1000,
+      "Number": 9
+    },
+    "ProofType": 8
+  },
+  "Bw=="
+]
+```
+
+Response: `"Bw=="`
 
 ### ComputeProof
 

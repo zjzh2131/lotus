@@ -645,6 +645,8 @@ type StorageMinerStruct struct {
 
 		ComputeDataCid func(p0 context.Context, p1 abi.UnpaddedPieceSize, p2 storage.Data) (abi.PieceInfo, error) `perm:"admin"`
 
+		ComputePoRep func(p0 context.Context, p1 storage.SectorRef, p2 storage.Commit1Out) (storage.Proof, error) `perm:"admin"`
+
 		ComputeProof func(p0 context.Context, p1 []builtin.ExtendedSectorInfo, p2 abi.PoStRandomness, p3 abi.ChainEpoch, p4 abinetwork.Version) ([]builtin.PoStProof, error) `perm:"read"`
 
 		ComputeWindowPoSt func(p0 context.Context, p1 uint64, p2 types.TipSetKey) ([]miner.SubmitWindowedPoStParams, error) `perm:"admin"`
@@ -3889,6 +3891,17 @@ func (s *StorageMinerStruct) ComputeDataCid(p0 context.Context, p1 abi.UnpaddedP
 
 func (s *StorageMinerStub) ComputeDataCid(p0 context.Context, p1 abi.UnpaddedPieceSize, p2 storage.Data) (abi.PieceInfo, error) {
 	return *new(abi.PieceInfo), ErrNotSupported
+}
+
+func (s *StorageMinerStruct) ComputePoRep(p0 context.Context, p1 storage.SectorRef, p2 storage.Commit1Out) (storage.Proof, error) {
+	if s.Internal.ComputePoRep == nil {
+		return *new(storage.Proof), ErrNotSupported
+	}
+	return s.Internal.ComputePoRep(p0, p1, p2)
+}
+
+func (s *StorageMinerStub) ComputePoRep(p0 context.Context, p1 storage.SectorRef, p2 storage.Commit1Out) (storage.Proof, error) {
+	return *new(storage.Proof), ErrNotSupported
 }
 
 func (s *StorageMinerStruct) ComputeProof(p0 context.Context, p1 []builtin.ExtendedSectorInfo, p2 abi.PoStRandomness, p3 abi.ChainEpoch, p4 abinetwork.Version) ([]builtin.PoStProof, error) {

@@ -429,6 +429,10 @@ func (sm *StorageMinerAPI) ComputeDataCid(ctx context.Context, pieceSize abi.Unp
 	return sm.StorageMgr.DataCid(ctx, pieceSize, pieceData)
 }
 
+func (sm *StorageMinerAPI) ComputePoRep(ctx context.Context, sector sto.SectorRef, c1o sto.Commit1Out) (sto.Proof, error) {
+	return sm.StorageMgr.SealCommit2(ctx, sector, c1o)
+}
+
 func (sm *StorageMinerAPI) WorkerConnect(ctx context.Context, url string) error {
 	w, err := connectRemoteWorker(ctx, sm, url)
 	if err != nil {

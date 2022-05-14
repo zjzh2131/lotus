@@ -55,6 +55,7 @@ type StorageMiner interface {
 	ComputeWindowPoSt(ctx context.Context, dlIdx uint64, tsk types.TipSetKey) ([]miner.SubmitWindowedPoStParams, error) //perm:admin
 
 	ComputeDataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, pieceData storage.Data) (abi.PieceInfo, error) //perm:admin
+	ComputePoRep(ctx context.Context, sector storage.SectorRef, c1o storage.Commit1Out) (storage.Proof, error)          //perm:admin
 
 	// Temp api for testing
 	PledgeSector(context.Context) (abi.SectorID, error) //perm:write
