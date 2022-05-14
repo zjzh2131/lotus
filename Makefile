@@ -101,6 +101,18 @@ lotus-worker: $(BUILD_DEPS)
 .PHONY: lotus-worker
 BINS+=lotus-worker
 
+sealmarket-provider: $(BUILD_DEPS)
+	rm -f sealmarket-provider
+	$(GOCC) build $(GOFLAGS) -o sealmarket-provider ./cmd/sealmarket-provider
+.PHONY: sealmarket-provider
+BINS+=sealmarket-provider
+
+sealmarket-worker: $(BUILD_DEPS)
+	rm -f sealmarket-worker
+	$(GOCC) build $(GOFLAGS) -o sealmarket-worker ./cmd/sealmarket-worker
+.PHONY: sealmarket-worker
+BINS+=sealmarket-worker
+
 lotus-shed: $(BUILD_DEPS)
 	rm -f lotus-shed
 	$(GOCC) build $(GOFLAGS) -o lotus-shed ./cmd/lotus-shed
