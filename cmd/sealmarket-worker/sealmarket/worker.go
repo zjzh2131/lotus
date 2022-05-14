@@ -2,11 +2,12 @@ package sealmarket
 
 import (
 	"context"
+	"sort"
+
 	"github.com/filecoin-project/lotus/snarky"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
-	"sort"
 
 	"github.com/ipfs/go-cid"
 
@@ -16,6 +17,18 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 )
 
+// TODO pass in host
+func NewWorkerCalls(ctx context.Context, totallyDecentralizedURL string) (*WorkerCalls, error) {
+
+	providers, err := DiscoverProviders(ctx, totallyDecentralizedURL)
+	if err != nil {
+		return nil, err
+	}
+	return &WorkerCalls{
+		providers: providers,
+	}, nil
+}
+
 type WorkerCalls struct {
 	host host.Host
 
@@ -23,7 +36,7 @@ type WorkerCalls struct {
 }
 
 type provider struct {
-	peer peer.ID
+	peer peer.AddrInfo
 	jobs map[snarky.JobID]job
 
 	success, fail int

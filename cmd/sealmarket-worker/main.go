@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/filecoin-project/lotus/cmd/sealmarket-worker/sealmarket"
-	"github.com/google/uuid"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/filecoin-project/lotus/cmd/sealmarket-worker/sealmarket"
+	"github.com/google/uuid"
 
 	logging "github.com/ipfs/go-log/v2"
 	manet "github.com/multiformats/go-multiaddr/net"
@@ -258,8 +259,17 @@ var runCmd = &cli.Command{
 
 		// Create / expose the worker
 
+		// TODO real fake url
+		discovery := "www.fake.com/fake/fake"
+		if err != nil {
+			panic(err)
+		}
+		wc, err := sealmarket.NewWorkerCalls(cctx.Context, discovery)
+		if err != nil {
+			panic(err)
+		}
 		workerApi := &sealmarket.Worker{
-			WorkerCalls: &sealmarket.WorkerCalls{},
+			WorkerCalls: wc,
 			Sess:        uuid.New(),
 		}
 
