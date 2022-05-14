@@ -40,7 +40,7 @@ func NewProvingService(h host.Host, cfg *Config) (*ProvingService, error) {
 }
 
 type PriceRequest struct {
-	ProofType int
+	ProofType abi.RegisteredSealProof
 }
 
 type PriceResponse struct {
@@ -95,8 +95,10 @@ func (ps *ProvingService) HandleWorkRequest(s inet.Stream) {
 
 }
 
+type JobID = string
+
 type StatusRequest struct {
-	JobID string
+	JobID JobID
 }
 
 type StatusResponse struct {

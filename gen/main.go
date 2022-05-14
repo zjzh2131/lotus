@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/filecoin-project/lotus/snarky"
 	"os"
 
 	"github.com/filecoin-project/lotus/chain/vm"
@@ -119,6 +120,24 @@ func main() {
 	}
 	err = gen.WriteMapEncodersToFile("./cmd/lotus-shed/shedgen/cbor_gen.go", "shedgen",
 		shedgen.CarbNode{},
+	)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	err = gen.WriteMapEncodersToFile("./snarky/cbor_gen.go", "snarky",
+		snarky.PriceRequest{},
+		snarky.PriceResponse{},
+
+		snarky.WorkRequest{},
+		snarky.WorkResponse{},
+
+		snarky.StatusRequest{},
+		snarky.StatusResponse{},
+
+		snarky.ProofResult{},
+		snarky.ProveCommitRequest{},
 	)
 	if err != nil {
 		fmt.Println(err)

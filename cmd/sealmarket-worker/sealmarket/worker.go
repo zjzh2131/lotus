@@ -2,6 +2,11 @@ package sealmarket
 
 import (
 	"context"
+	"github.com/filecoin-project/lotus/snarky"
+	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/xerrors"
+	"sort"
 
 	"github.com/ipfs/go-cid"
 
@@ -12,11 +17,45 @@ import (
 )
 
 type WorkerCalls struct {
+	host host.Host
+
+	providers []provider
+}
+
+type provider struct {
+	peer peer.ID
+	jobs map[snarky.JobID]job
+
+	success, fail int
+}
+
+func (p *provider) successRatio() float64 {
+	if p.success+p.fail == 0 {
+		return 1
+	}
+
+	return float64(p.success) / float64(p.success+p.fail)
+}
+
+type job struct {
+	sector storage.SectorRef
+	call   storiface.CallID
+
+	commit2Params *storage.Commit1Out
 }
 
 func (w *WorkerCalls) SealCommit2(ctx context.Context, sector storage.SectorRef, c1o storage.Commit1Out) (storiface.CallID, error) {
-	//TODO implement me
-	panic("implement me")
+	sort.Slice(w.providers, func(i, j int) bool {
+		return w.providers[i].successRatio() > w.providers[j].successRatio()
+	})
+
+	if len(w.providers) == 0 {
+		return storiface.CallID{}, xerrors.Errorf("no providers")
+	}
+
+	provider := w.providers[0]
+
+	w.host.NewStream()
 }
 
 // Unsupported
