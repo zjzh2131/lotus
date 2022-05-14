@@ -72,6 +72,7 @@ func NewProvingService(h host.Host, cfg *Config, papi ProvingApi, vapi VoucherAp
 		cfg:   cfg,
 		store: ds,
 		papi:  papi,
+		vapi:  vapi,
 		addr:  cfg.Address,
 
 		semaPC: make(chan struct{}, cfg.ProveCommitParJobs),

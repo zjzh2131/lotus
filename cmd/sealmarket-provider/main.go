@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
-	"strings"
 	"time"
 
 	logging "github.com/ipfs/go-log/v2"
@@ -45,7 +43,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    FlagSealProviderRepo,
-				EnvVars: []string{"SEALMARKET_PATH"},
+				EnvVars: []string{"SEAL_PROVIDER_PATH"},
 				Value:   "~/.sealmarket", // TODO: Consider XDG_DATA_HOME
 			},
 			&cli.StringFlag{
@@ -130,7 +128,7 @@ var runCmd = &cli.Command{
 		var fullNodeApi api.FullNode
 		var lcloser func()
 		for {
-			fullNodeApi, closer, err = lcli.GetFullNodeAPIV1(cctx)
+			fullNodeApi, closer, err = lcli.GetFullNodeAPIV1(cctx) // todo use http
 			if err == nil {
 				_, err = fullNodeApi.Version(ctx)
 				if err == nil {
@@ -229,6 +227,12 @@ var runCmd = &cli.Command{
 			return err
 		}
 
+		fmt.Println("---- BEGIN PROVIDER ADDRS ----")
+		for _, multiaddr := range host.Addrs() {
+			fmt.Println(multiaddr)
+		}
+		fmt.Println("---- END PROVIDER ADDRS ----")
+
 		cfg := &proversvc.Config{
 			ProveCommitEnable:  true,
 			ProveCommitParJobs: 5,
@@ -247,30 +251,6 @@ var runCmd = &cli.Command{
 			return ctx.Err()
 		}
 	},
-}
-
-func extractRoutableIP(timeout time.Duration) (string, error) {
-	minerMultiAddrKey := "MINER_API_INFO"
-	deprecatedMinerMultiAddrKey := "STORAGE_API_INFO"
-	env, ok := os.LookupEnv(minerMultiAddrKey)
-	if !ok {
-		// TODO remove after deprecation period
-		_, ok = os.LookupEnv(deprecatedMinerMultiAddrKey)
-		if ok {
-			log.Warnf("Using a deprecated env(%s) value, please use env(%s) instead.", deprecatedMinerMultiAddrKey, minerMultiAddrKey)
-		}
-		return "", xerrors.New("MINER_API_INFO environment variable required to extract IP")
-	}
-	minerAddr := strings.Split(env, "/")
-	conn, err := net.DialTimeout("tcp", minerAddr[2]+":"+minerAddr[4], timeout)
-	if err != nil {
-		return "", err
-	}
-	defer conn.Close() //nolint:errcheck
-
-	localAddr := conn.LocalAddr().(*net.TCPAddr)
-
-	return strings.Split(localAddr.IP.String(), ":")[0], nil
 }
 
 type repoType struct {
