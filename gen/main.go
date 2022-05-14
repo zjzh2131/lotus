@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/filecoin-project/lotus/snarky"
 	"os"
+
+	"github.com/filecoin-project/lotus/snarky"
 
 	"github.com/filecoin-project/lotus/chain/vm"
 
@@ -138,6 +139,9 @@ func main() {
 
 		snarky.ProofResult{},
 		snarky.ProveCommitRequest{},
+
+		snarky.PaymentData{},
+		snarky.SectorRef{},
 	)
 	if err != nil {
 		fmt.Println(err)

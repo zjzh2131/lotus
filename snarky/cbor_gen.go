@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	abi "github.com/filecoin-project/go-state-types/abi"
+	paych "github.com/filecoin-project/specs-actors/actors/builtin/paych"
 	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
@@ -24,13 +25,35 @@ func (t *PriceRequest) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{161}); err != nil {
+	if _, err := w.Write([]byte{162}); err != nil {
 		return err
 	}
 
 	scratch := make([]byte, 9)
 
-	// t.ProofType (abi.RegisteredSealProof) (int64)
+	// t.ProofClass (int64) (int64)
+	if len("ProofClass") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"ProofClass\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("ProofClass"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("ProofClass")); err != nil {
+		return err
+	}
+
+	if t.ProofClass >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ProofClass)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.ProofClass-1)); err != nil {
+			return err
+		}
+	}
+
+	// t.ProofType (int64) (int64)
 	if len("ProofType") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"ProofType\" was too long")
 	}
@@ -87,7 +110,33 @@ func (t *PriceRequest) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		switch name {
-		// t.ProofType (abi.RegisteredSealProof) (int64)
+		// t.ProofClass (int64) (int64)
+		case "ProofClass":
+			{
+				maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+				var extraI int64
+				if err != nil {
+					return err
+				}
+				switch maj {
+				case cbg.MajUnsignedInt:
+					extraI = int64(extra)
+					if extraI < 0 {
+						return fmt.Errorf("int64 positive overflow")
+					}
+				case cbg.MajNegativeInt:
+					extraI = int64(extra)
+					if extraI < 0 {
+						return fmt.Errorf("int64 negative oveflow")
+					}
+					extraI = -1 - extraI
+				default:
+					return fmt.Errorf("wrong type for int64 field: %d", maj)
+				}
+
+				t.ProofClass = int64(extraI)
+			}
+			// t.ProofType (int64) (int64)
 		case "ProofType":
 			{
 				maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
@@ -111,7 +160,7 @@ func (t *PriceRequest) UnmarshalCBOR(r io.Reader) error {
 					return fmt.Errorf("wrong type for int64 field: %d", maj)
 				}
 
-				t.ProofType = abi.RegisteredSealProof(extraI)
+				t.ProofType = int64(extraI)
 			}
 
 		default:
@@ -127,7 +176,7 @@ func (t *PriceResponse) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{163}); err != nil {
+	if _, err := w.Write([]byte{164}); err != nil {
 		return err
 	}
 
@@ -162,6 +211,22 @@ func (t *PriceResponse) MarshalCBOR(w io.Writer) error {
 	}
 
 	if err := t.Price.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Address (address.Address) (struct)
+	if len("Address") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Address\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Address"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Address")); err != nil {
+		return err
+	}
+
+	if err := t.Address.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -251,6 +316,16 @@ func (t *PriceResponse) UnmarshalCBOR(r io.Reader) error {
 				}
 
 			}
+			// t.Address (address.Address) (struct)
+		case "Address":
+
+			{
+
+				if err := t.Address.UnmarshalCBOR(br); err != nil {
+					return xerrors.Errorf("unmarshaling t.Address: %w", err)
+				}
+
+			}
 			// t.Error (string) (string)
 		case "Error":
 
@@ -276,13 +351,13 @@ func (t *WorkRequest) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{162}); err != nil {
+	if _, err := w.Write([]byte{164}); err != nil {
 		return err
 	}
 
 	scratch := make([]byte, 9)
 
-	// t.Payment ([]uint8) (slice)
+	// t.Payment (snarky.PaymentData) (struct)
 	if len("Payment") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Payment\" was too long")
 	}
@@ -294,15 +369,7 @@ func (t *WorkRequest) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	if len(t.Payment) > cbg.ByteArrayMaxLen {
-		return xerrors.Errorf("Byte array in field t.Payment was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.Payment))); err != nil {
-		return err
-	}
-
-	if _, err := w.Write(t.Payment[:]); err != nil {
+	if err := t.Payment.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -320,6 +387,50 @@ func (t *WorkRequest) MarshalCBOR(w io.Writer) error {
 
 	if err := t.ProveCommitRequest.MarshalCBOR(w); err != nil {
 		return err
+	}
+
+	// t.ProofClass (int64) (int64)
+	if len("ProofClass") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"ProofClass\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("ProofClass"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("ProofClass")); err != nil {
+		return err
+	}
+
+	if t.ProofClass >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ProofClass)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.ProofClass-1)); err != nil {
+			return err
+		}
+	}
+
+	// t.ProofType (int64) (int64)
+	if len("ProofType") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"ProofType\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("ProofType"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("ProofType")); err != nil {
+		return err
+	}
+
+	if t.ProofType >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ProofType)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.ProofType-1)); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -357,27 +468,25 @@ func (t *WorkRequest) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		switch name {
-		// t.Payment ([]uint8) (slice)
+		// t.Payment (snarky.PaymentData) (struct)
 		case "Payment":
 
-			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-			if err != nil {
-				return err
-			}
+			{
 
-			if extra > cbg.ByteArrayMaxLen {
-				return fmt.Errorf("t.Payment: byte array too large (%d)", extra)
-			}
-			if maj != cbg.MajByteString {
-				return fmt.Errorf("expected byte array")
-			}
+				b, err := br.ReadByte()
+				if err != nil {
+					return err
+				}
+				if b != cbg.CborNull[0] {
+					if err := br.UnreadByte(); err != nil {
+						return err
+					}
+					t.Payment = new(PaymentData)
+					if err := t.Payment.UnmarshalCBOR(br); err != nil {
+						return xerrors.Errorf("unmarshaling t.Payment pointer: %w", err)
+					}
+				}
 
-			if extra > 0 {
-				t.Payment = make([]uint8, extra)
-			}
-
-			if _, err := io.ReadFull(br, t.Payment[:]); err != nil {
-				return err
 			}
 			// t.ProveCommitRequest (snarky.ProveCommitRequest) (struct)
 		case "ProveCommitRequest":
@@ -398,6 +507,58 @@ func (t *WorkRequest) UnmarshalCBOR(r io.Reader) error {
 					}
 				}
 
+			}
+			// t.ProofClass (int64) (int64)
+		case "ProofClass":
+			{
+				maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+				var extraI int64
+				if err != nil {
+					return err
+				}
+				switch maj {
+				case cbg.MajUnsignedInt:
+					extraI = int64(extra)
+					if extraI < 0 {
+						return fmt.Errorf("int64 positive overflow")
+					}
+				case cbg.MajNegativeInt:
+					extraI = int64(extra)
+					if extraI < 0 {
+						return fmt.Errorf("int64 negative oveflow")
+					}
+					extraI = -1 - extraI
+				default:
+					return fmt.Errorf("wrong type for int64 field: %d", maj)
+				}
+
+				t.ProofClass = int64(extraI)
+			}
+			// t.ProofType (int64) (int64)
+		case "ProofType":
+			{
+				maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+				var extraI int64
+				if err != nil {
+					return err
+				}
+				switch maj {
+				case cbg.MajUnsignedInt:
+					extraI = int64(extra)
+					if extraI < 0 {
+						return fmt.Errorf("int64 positive overflow")
+					}
+				case cbg.MajNegativeInt:
+					extraI = int64(extra)
+					if extraI < 0 {
+						return fmt.Errorf("int64 negative oveflow")
+					}
+					extraI = -1 - extraI
+				default:
+					return fmt.Errorf("wrong type for int64 field: %d", maj)
+				}
+
+				t.ProofType = int64(extraI)
 			}
 
 		default:
@@ -784,7 +945,7 @@ func (t *ProofResult) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{161}); err != nil {
+	if _, err := w.Write([]byte{162}); err != nil {
 		return err
 	}
 
@@ -811,6 +972,29 @@ func (t *ProofResult) MarshalCBOR(w io.Writer) error {
 	}
 
 	if _, err := w.Write(t.Proof[:]); err != nil {
+		return err
+	}
+
+	// t.Error (string) (string)
+	if len("Error") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Error\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Error"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Error")); err != nil {
+		return err
+	}
+
+	if len(t.Error) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Error was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Error))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Error)); err != nil {
 		return err
 	}
 	return nil
@@ -871,6 +1055,17 @@ func (t *ProofResult) UnmarshalCBOR(r io.Reader) error {
 			if _, err := io.ReadFull(br, t.Proof[:]); err != nil {
 				return err
 			}
+			// t.Error (string) (string)
+		case "Error":
+
+			{
+				sval, err := cbg.ReadStringBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+
+				t.Error = string(sval)
+			}
 
 		default:
 			// Field doesn't exist on this type, so ignore it
@@ -891,7 +1086,7 @@ func (t *ProveCommitRequest) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.Sector (storage.SectorRef) (struct)
+	// t.Sector (snarky.SectorRef) (struct)
 	if len("Sector") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Sector\" was too long")
 	}
@@ -966,7 +1161,7 @@ func (t *ProveCommitRequest) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		switch name {
-		// t.Sector (storage.SectorRef) (struct)
+		// t.Sector (snarky.SectorRef) (struct)
 		case "Sector":
 
 			{
@@ -997,6 +1192,252 @@ func (t *ProveCommitRequest) UnmarshalCBOR(r io.Reader) error {
 
 			if _, err := io.ReadFull(br, t.C1o[:]); err != nil {
 				return err
+			}
+
+		default:
+			// Field doesn't exist on this type, so ignore it
+			cbg.ScanForLinks(r, func(cid.Cid) {})
+		}
+	}
+
+	return nil
+}
+func (t *PaymentData) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write([]byte{162}); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.From (address.Address) (struct)
+	if len("From") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"From\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("From"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("From")); err != nil {
+		return err
+	}
+
+	if err := t.From.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Voucher (paych.SignedVoucher) (struct)
+	if len("Voucher") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Voucher\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Voucher"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Voucher")); err != nil {
+		return err
+	}
+
+	if err := t.Voucher.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *PaymentData) UnmarshalCBOR(r io.Reader) error {
+	*t = PaymentData{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajMap {
+		return fmt.Errorf("cbor input should be of type map")
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("PaymentData: map struct too large (%d)", extra)
+	}
+
+	var name string
+	n := extra
+
+	for i := uint64(0); i < n; i++ {
+
+		{
+			sval, err := cbg.ReadStringBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+
+			name = string(sval)
+		}
+
+		switch name {
+		// t.From (address.Address) (struct)
+		case "From":
+
+			{
+
+				if err := t.From.UnmarshalCBOR(br); err != nil {
+					return xerrors.Errorf("unmarshaling t.From: %w", err)
+				}
+
+			}
+			// t.Voucher (paych.SignedVoucher) (struct)
+		case "Voucher":
+
+			{
+
+				b, err := br.ReadByte()
+				if err != nil {
+					return err
+				}
+				if b != cbg.CborNull[0] {
+					if err := br.UnreadByte(); err != nil {
+						return err
+					}
+					t.Voucher = new(paych.SignedVoucher)
+					if err := t.Voucher.UnmarshalCBOR(br); err != nil {
+						return xerrors.Errorf("unmarshaling t.Voucher pointer: %w", err)
+					}
+				}
+
+			}
+
+		default:
+			// Field doesn't exist on this type, so ignore it
+			cbg.ScanForLinks(r, func(cid.Cid) {})
+		}
+	}
+
+	return nil
+}
+func (t *SectorRef) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write([]byte{162}); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.ID (abi.SectorID) (struct)
+	if len("ID") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"ID\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("ID"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("ID")); err != nil {
+		return err
+	}
+
+	if err := t.ID.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.ProofType (abi.RegisteredSealProof) (int64)
+	if len("ProofType") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"ProofType\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("ProofType"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("ProofType")); err != nil {
+		return err
+	}
+
+	if t.ProofType >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ProofType)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.ProofType-1)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *SectorRef) UnmarshalCBOR(r io.Reader) error {
+	*t = SectorRef{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajMap {
+		return fmt.Errorf("cbor input should be of type map")
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("SectorRef: map struct too large (%d)", extra)
+	}
+
+	var name string
+	n := extra
+
+	for i := uint64(0); i < n; i++ {
+
+		{
+			sval, err := cbg.ReadStringBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+
+			name = string(sval)
+		}
+
+		switch name {
+		// t.ID (abi.SectorID) (struct)
+		case "ID":
+
+			{
+
+				if err := t.ID.UnmarshalCBOR(br); err != nil {
+					return xerrors.Errorf("unmarshaling t.ID: %w", err)
+				}
+
+			}
+			// t.ProofType (abi.RegisteredSealProof) (int64)
+		case "ProofType":
+			{
+				maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+				var extraI int64
+				if err != nil {
+					return err
+				}
+				switch maj {
+				case cbg.MajUnsignedInt:
+					extraI = int64(extra)
+					if extraI < 0 {
+						return fmt.Errorf("int64 positive overflow")
+					}
+				case cbg.MajNegativeInt:
+					extraI = int64(extra)
+					if extraI < 0 {
+						return fmt.Errorf("int64 negative oveflow")
+					}
+					extraI = -1 - extraI
+				default:
+					return fmt.Errorf("wrong type for int64 field: %d", maj)
+				}
+
+				t.ProofType = abi.RegisteredSealProof(extraI)
 			}
 
 		default:
