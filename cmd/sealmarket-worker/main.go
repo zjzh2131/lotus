@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/filecoin-project/lotus/cmd/sealmarket-worker/sealmarket"
+	"github.com/google/uuid"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/ipfs/go-datastore/namespace"
 	logging "github.com/ipfs/go-log/v2"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/urfave/cli/v2"
@@ -17,20 +18,14 @@ import (
 	"go.opencensus.io/tag"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/go-statestore"
-
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	lcli "github.com/filecoin-project/lotus/cli"
 	cliutil "github.com/filecoin-project/lotus/cli/util"
-	"github.com/filecoin-project/lotus/cmd/lotus-worker/sealworker"
-	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
-	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
 	"github.com/filecoin-project/lotus/lib/lotuslog"
 	"github.com/filecoin-project/lotus/lib/ulimit"
 	"github.com/filecoin-project/lotus/metrics"
-	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/repo"
 )
 
@@ -45,12 +40,8 @@ func main() {
 
 	local := []*cli.Command{
 		runCmd,
-		infoCmd,
-		storageCmd,
 		setCmd,
 		waitQuietCmd,
-		resourcesCmd,
-		tasksCmd,
 	}
 
 	app := &cli.App{
@@ -187,7 +178,7 @@ var runCmd = &cli.Command{
 			return err
 		}
 
-		var taskTypes []sealtasks.TaskType
+		_ = act // todo
 
 		// Open repo
 
@@ -245,6 +236,8 @@ var runCmd = &cli.Command{
 			return err
 		}
 
+		_ = ds // todo
+
 		log.Info("Opening local storage; connecting to master")
 		const unspecifiedAddress = "0.0.0.0"
 		address := cctx.String("listen")
@@ -265,23 +258,15 @@ var runCmd = &cli.Command{
 
 		// Create / expose the worker
 
-		wsts := statestore.New(namespace.Wrap(ds, modules.WorkerCallsPrefix))
-
-		workerApi := &sealworker.Worker{
-			LocalWorker: sectorstorage.NewLocalWorker(sectorstorage.WorkerConfig{
-				TaskTypes:                 taskTypes,
-				NoSwap:                    cctx.Bool("no-swap"),
-				MaxParallelChallengeReads: cctx.Int("post-parallel-reads"),
-				ChallengeReadTimeout:      cctx.Duration("post-read-timeout"),
-			}, remote, localStore, nodeApi, nodeApi, wsts),
-			LocalStore: localStore,
-			Storage:    lr,
+		workerApi := &sealmarket.Worker{
+			WorkerCalls: &sealmarket.WorkerCalls{},
+			Sess:        uuid.New(),
 		}
 
 		log.Info("Setting up control endpoint at " + address)
 
 		srv := &http.Server{
-			Handler: sealworker.WorkerHandler(nodeApi.AuthVerify, remoteHandler, workerApi, true),
+			Handler: sealmarket.WorkerHandler(nodeApi.AuthVerify, workerApi, true),
 			BaseContext: func(listener net.Listener) context.Context {
 				ctx, _ := tag.New(context.Background(), tag.Upsert(metrics.APIInterface, "lotus-worker"))
 				return ctx
@@ -336,7 +321,7 @@ var runCmd = &cli.Command{
 		waitQuietCh := func() chan struct{} {
 			out := make(chan struct{})
 			go func() {
-				workerApi.LocalWorker.WaitQuiet()
+				//workerApi.LocalWorker.WaitQuiet() todo
 				close(out)
 			}()
 			return out
@@ -346,26 +331,8 @@ var runCmd = &cli.Command{
 			heartbeats := time.NewTicker(stores.HeartbeatInterval)
 			defer heartbeats.Stop()
 
-			var redeclareStorage bool
 			var readyCh chan struct{}
 			for {
-				// If we're reconnecting, redeclare storage first
-				if redeclareStorage {
-					log.Info("Redeclaring local storage")
-
-					if err := localStore.Redeclare(ctx); err != nil {
-						log.Errorf("Redeclaring local storage failed: %+v", err)
-
-						select {
-						case <-ctx.Done():
-							return // graceful shutdown
-						case <-heartbeats.C:
-						}
-						continue
-					}
-				}
-
-				// TODO: we could get rid of this, but that requires tracking resources for restarted tasks correctly
 				if readyCh == nil {
 					log.Info("Making sure no local tasks are running")
 					readyCh = waitQuietCh()
@@ -400,8 +367,6 @@ var runCmd = &cli.Command{
 				}
 
 				log.Errorf("LOTUS-MINER CONNECTION LOST")
-
-				redeclareStorage = true
 			}
 		}()
 
