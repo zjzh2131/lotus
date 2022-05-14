@@ -145,6 +145,13 @@ type SectorRef struct {
 	ProofType abi.RegisteredSealProof
 }
 
+func RefFormNative(ref storage.SectorRef) SectorRef {
+	return SectorRef{
+		ID:        ref.ID,
+		ProofType: ref.ProofType,
+	}
+}
+
 func (sr SectorRef) ToNative() storage.SectorRef {
 	return storage.SectorRef{
 		ID:        sr.ID,
@@ -349,10 +356,20 @@ type StatusRequest struct {
 	JobID JobID
 }
 
+type Status uint64
+
+const (
+	StatusInProgress Status = iota
+	StatusDone
+	StatusFailed
+)
+
 type StatusResponse struct {
-	Status string
+	Status Status
 	Error  string
 	Result *ProofResult
+
+	// todo return voucher on fail maybe
 }
 
 type ProofResult struct {
@@ -379,13 +396,20 @@ func (ps *ProvingService) HandleStatusRequest(req *StatusRequest) *StatusRespons
 	st, err := ps.GetJobStatus(req.JobID)
 	if err != nil {
 		return &StatusResponse{
-			Status: "error",
+			Status: StatusFailed,
 			Error:  err.Error(),
 		}
 	}
 
+	if st.Result == nil {
+		return &StatusResponse{
+			Status: StatusInProgress,
+			Result: st.Result,
+		}
+	}
+
 	return &StatusResponse{
-		Status: st.Status,
+		Status: StatusDone,
 		Result: st.Result,
 	}
 }

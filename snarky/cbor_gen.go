@@ -176,7 +176,7 @@ func (t *PriceResponse) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{164}); err != nil {
+	if _, err := w.Write([]byte{165}); err != nil {
 		return err
 	}
 
@@ -211,6 +211,22 @@ func (t *PriceResponse) MarshalCBOR(w io.Writer) error {
 	}
 
 	if err := t.Price.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Addr (address.Address) (struct)
+	if len("Addr") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"Addr\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("Addr"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("Addr")); err != nil {
+		return err
+	}
+
+	if err := t.Addr.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -313,6 +329,16 @@ func (t *PriceResponse) UnmarshalCBOR(r io.Reader) error {
 
 				if err := t.Price.UnmarshalCBOR(br); err != nil {
 					return xerrors.Errorf("unmarshaling t.Price: %w", err)
+				}
+
+			}
+			// t.Addr (address.Address) (struct)
+		case "Addr":
+
+			{
+
+				if err := t.Addr.UnmarshalCBOR(br); err != nil {
+					return xerrors.Errorf("unmarshaling t.Addr: %w", err)
 				}
 
 			}
@@ -792,7 +818,7 @@ func (t *StatusResponse) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.Status (string) (string)
+	// t.Status (snarky.Status) (uint64)
 	if len("Status") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"Status\" was too long")
 	}
@@ -804,14 +830,7 @@ func (t *StatusResponse) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	if len(t.Status) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Status was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Status))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Status)); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Status)); err != nil {
 		return err
 	}
 
@@ -889,16 +908,20 @@ func (t *StatusResponse) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		switch name {
-		// t.Status (string) (string)
+		// t.Status (snarky.Status) (uint64)
 		case "Status":
 
 			{
-				sval, err := cbg.ReadStringBuf(br, scratch)
+
+				maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 				if err != nil {
 					return err
 				}
+				if maj != cbg.MajUnsignedInt {
+					return fmt.Errorf("wrong type for uint64 field")
+				}
+				t.Status = Status(extra)
 
-				t.Status = string(sval)
 			}
 			// t.Error (string) (string)
 		case "Error":

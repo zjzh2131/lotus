@@ -6,6 +6,7 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/google/uuid"
 	"sort"
 
 	"github.com/filecoin-project/lotus/snarky"
@@ -26,6 +27,8 @@ import (
 
 var log = logging.Logger("sealmarket")
 
+const PollingInterval = time.Minute
+
 // TODO pass in host
 func NewWorkerCalls(ctx context.Context, totallyDecentralizedURL string) (*WorkerCalls, error) {
 	providers, err := DiscoverProviders(ctx, totallyDecentralizedURL)
@@ -39,6 +42,7 @@ func NewWorkerCalls(ctx context.Context, totallyDecentralizedURL string) (*Worke
 
 type WorkerCalls struct {
 	chain api.FullNode
+	ret   storiface.WorkerReturn
 
 	host       host.Host
 	clientAddr addr.Address
@@ -49,9 +53,23 @@ type WorkerCalls struct {
 type provider struct {
 	peer peer.AddrInfo
 
-	jobs map[snarky.JobID]job
+	jobs map[storiface.CallID]*job
 
 	success, fail int
+}
+
+type job struct {
+	sector storage.SectorRef
+	job    snarky.JobID
+
+	start time.Time
+
+	returned bool
+
+	c2proof *storage.Proof
+	err     *storiface.CallError
+
+	// for retry todo commit2Params *storage.Commit1Out
 }
 
 func (p *provider) successRatio() float64 {
@@ -62,7 +80,7 @@ func (p *provider) successRatio() float64 {
 	return float64(p.success) / float64(p.success+p.fail)
 }
 
-func (p *provider) queryPrice(ctx context.Context, h host.Host, spt abi.RegisteredSealProof) (abi.TokenAmount, error) {
+func (p *provider) queryPrice(ctx context.Context, h host.Host, spt abi.RegisteredSealProof) (*snarky.PriceResponse, error) {
 	ctx, done := context.WithTimeout(ctx, 5*time.Second)
 	defer done()
 
@@ -70,11 +88,11 @@ func (p *provider) queryPrice(ctx context.Context, h host.Host, spt abi.Register
 
 	stream, err := h.NewStream(ctx, p.peer.ID, snarky.ProvServPriceProtocol)
 	if err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("opening price ask stream: %w", err)
+		return nil, xerrors.Errorf("opening price ask stream: %w", err)
 	}
 
 	if err := stream.SetDeadline(time.Now().Add(time.Second * 5)); err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("setting stream deadline: %w", err)
+		return nil, xerrors.Errorf("setting stream deadline: %w", err)
 	}
 
 	defer func() {
@@ -88,50 +106,50 @@ func (p *provider) queryPrice(ctx context.Context, h host.Host, spt abi.Register
 	}
 	var rb bytes.Buffer
 	if err := req.MarshalCBOR(&rb); err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("marshal price request: %w", err)
+		return nil, xerrors.Errorf("marshal price request: %w", err)
 	}
 
 	if _, err := stream.Write(rb.Bytes()); err != nil {
-		return abi.TokenAmount{}, err
+		return nil, err
 	}
 
 	if err := stream.CloseWrite(); err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("closing stream write: %w", err)
+		return nil, xerrors.Errorf("closing stream write: %w", err)
 	}
 
 	var resp [1024]byte
 
 	n, err := stream.Read(resp[:])
 	if err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("read resp: %w", err)
+		return nil, xerrors.Errorf("read resp: %w", err)
 	}
 
 	if n == 1024 {
-		return abi.TokenAmount{}, xerrors.Errorf("response too long")
+		return nil, xerrors.Errorf("response too long")
 	}
 	var res snarky.PriceResponse
 	if err := res.UnmarshalCBOR(bytes.NewReader(resp[:])); err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("unmarshal: %w", err)
+		return nil, xerrors.Errorf("unmarshal: %w", err)
 	}
 
 	if !res.Accept {
-		return res.Price, xerrors.Errorf("not accepted: '%s'", res.Error) // todo safe string?
+		return &res, xerrors.Errorf("not accepted: '%s'", res.Error) // todo safe string?
 	}
 
-	return res.Price, nil
+	return &res, nil
 }
 
-func (p *provider) requestWork(ctx context.Context, h host.Host, sector storage.SectorRef, c1o storage.Commit1Out, payment *paych.SignedVoucher) (abi.TokenAmount, error) {
-	ctx, done := context.WithTimeout(ctx, 5*time.Second)
+func (p *provider) requestWork(ctx context.Context, h host.Host, sector storage.SectorRef, c1o storage.Commit1Out, payment *paych.SignedVoucher) (snarky.JobID, error) {
+	ctx, done := context.WithTimeout(ctx, 120*time.Second)
 	defer done()
 
-	stream, err := h.NewStream(ctx, p.peer, snarky.ProvServProtocol)
+	stream, err := h.NewStream(ctx, p.peer.ID, snarky.ProvServProtocol)
 	if err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("opening price ask stream: %w", err)
+		return "", xerrors.Errorf("opening price ask stream: %w", err)
 	}
 
-	if err := stream.SetDeadline(time.Now().Add(2 * time.Minute)); err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("setting stream deadline: %w", err)
+	if err := stream.SetDeadline(time.Now().Add(120 * time.Second)); err != nil {
+		return "", xerrors.Errorf("setting stream deadline: %w", err)
 	}
 
 	defer func() {
@@ -143,51 +161,98 @@ func (p *provider) requestWork(ctx context.Context, h host.Host, sector storage.
 	req := &snarky.WorkRequest{
 		Payment: payment,
 		ProveCommitRequest: &snarky.ProveCommitRequest{
-			SealProof: sector.ProofType,
-			Sector:    sector.ID,
-			C1o:       c1o,
+			Sector: snarky.RefFormNative(sector),
+			C1o:    c1o,
 		},
 	}
 	var rb bytes.Buffer
 	if err := req.MarshalCBOR(&rb); err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("marshal price request: %w", err)
+		return "", xerrors.Errorf("marshal price request: %w", err)
 	}
 
 	if _, err := stream.Write(rb.Bytes()); err != nil {
-		return abi.TokenAmount{}, err
+		return "", xerrors.Errorf("writing request: %w", err)
 	}
 
 	if err := stream.CloseWrite(); err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("closing stream write: %w", err)
+		return "", xerrors.Errorf("closing stream write: %w", err)
 	}
 
 	var resp [1024]byte
 
 	n, err := stream.Read(resp[:])
 	if err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("read resp: %w", err)
+		return "", xerrors.Errorf("read resp: %w", err)
 	}
 
 	if n == 1024 {
-		return abi.TokenAmount{}, xerrors.Errorf("response too long")
+		return "", xerrors.Errorf("response too long")
 	}
-	var res snarky.PriceResponse
+	var res snarky.WorkResponse
 	if err := res.UnmarshalCBOR(bytes.NewReader(resp[:])); err != nil {
-		return abi.TokenAmount{}, xerrors.Errorf("unmarshal: %w", err)
+		return "", xerrors.Errorf("unmarshal: %w", err)
 	}
 
-	if !res.Accept {
-		return res.Price, xerrors.Errorf("not accepted: '%s'", res.Error) // todo safe string?
+	if res.Error != "" {
+		return "", xerrors.Errorf("job error: %s", res.Error) // todo safe string
 	}
 
-	return res.Price, nil
+	// todo check jobid structure maybe
+
+	return res.JobID, nil
 }
 
-type job struct {
-	sector storage.SectorRef
-	call   storiface.CallID
+func (p *provider) requestStatus(ctx context.Context, h host.Host, job snarky.JobID) (*snarky.StatusResponse, error) {
+	ctx, done := context.WithTimeout(ctx, 5*time.Second)
+	defer done()
 
-	commit2Params *storage.Commit1Out
+	stream, err := h.NewStream(ctx, p.peer.ID, snarky.ProvServStatusProtocol)
+	if err != nil {
+		return nil, xerrors.Errorf("opening price ask stream: %w", err)
+	}
+
+	if err := stream.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return nil, xerrors.Errorf("setting stream deadline: %w", err)
+	}
+
+	defer func() {
+		if err := stream.Close(); err != nil {
+			log.Errorw("closing stream", "err", err)
+		}
+	}()
+
+	req := &snarky.StatusRequest{
+		JobID: job,
+	}
+	var rb bytes.Buffer
+	if err := req.MarshalCBOR(&rb); err != nil {
+		return nil, xerrors.Errorf("marshal price request: %w", err)
+	}
+
+	if _, err := stream.Write(rb.Bytes()); err != nil {
+		return nil, xerrors.Errorf("writing request: %w", err)
+	}
+
+	if err := stream.CloseWrite(); err != nil {
+		return nil, xerrors.Errorf("closing stream write: %w", err)
+	}
+
+	var resp [102400]byte
+
+	n, err := stream.Read(resp[:])
+	if err != nil {
+		return nil, xerrors.Errorf("read resp: %w", err)
+	}
+
+	if n == 102400 {
+		return nil, xerrors.Errorf("response too long")
+	}
+	var res snarky.StatusResponse
+	if err := res.UnmarshalCBOR(bytes.NewReader(resp[:])); err != nil {
+		return nil, xerrors.Errorf("unmarshal: %w", err)
+	}
+
+	return &res, nil
 }
 
 func (w *WorkerCalls) SealCommit2(ctx context.Context, sector storage.SectorRef, c1o storage.Commit1Out) (storiface.CallID, error) {
@@ -202,21 +267,21 @@ func (w *WorkerCalls) SealCommit2(ctx context.Context, sector storage.SectorRef,
 	log.Info("start commit2 provider selection", "sector", sector.ID, "proofType", sector.ProofType)
 
 	var prov *provider
-	var price abi.TokenAmount
+	var ask *snarky.PriceResponse
 	for _, p := range w.providers {
 		var err error
-		price, err = p.queryPrice(ctx, w.host, sector.ProofType)
+		ask, err = p.queryPrice(ctx, w.host, sector.ProofType)
 		if err == nil {
 			prov = &p
 			break
 		}
 
-		log.Warnw("failed to query provider", "prov", p.addr, "err", err)
+		log.Warnw("failed to query provider", "prov", prov.peer.ID, "err", err)
 	}
 
-	log.Info("commit2 provider selected", "provider", prov.addr, "price", types.FIL(price))
+	log.Infow("commit2 provider selected", "provider", prov.peer.ID, "price", types.FIL(ask.Price))
 
-	pch, err := w.chain.PaychGet(ctx, w.clientAddr, prov.addr, price, api.PaychGetOpts{OffChain: true})
+	pch, err := w.chain.PaychGet(ctx, w.clientAddr, ask.Addr, ask.Price, api.PaychGetOpts{OffChain: true})
 	if err != nil {
 		// todo disable provider + try other providers
 		return storiface.CallID{}, xerrors.Errorf("getting payment channel: %w", err)
@@ -228,11 +293,75 @@ func (w *WorkerCalls) SealCommit2(ctx context.Context, sector storage.SectorRef,
 		return storiface.CallID{}, xerrors.Errorf("getting paych lane: %w", err)
 	}
 
-	v, err := w.chain.PaychVoucherCreate(ctx, pch.Channel, price, lane)
+	v, err := w.chain.PaychVoucherCreate(ctx, pch.Channel, ask.Price, lane)
 	if err != nil {
 		return storiface.CallID{}, xerrors.Errorf("creating payment voucher: %w", err)
 	}
 
+	jobId, err := prov.requestWork(ctx, w.host, sector, c1o, v.Voucher)
+	if err != nil {
+		return storiface.CallID{}, xerrors.Errorf("requesting work: %w", err)
+	}
+
+	callId := storiface.CallID{
+		Sector: sector.ID,
+		ID:     uuid.New(),
+	}
+	log.Infow("work started", "provider", prov.peer.ID, "job", jobId, "call", callId)
+
+	jobEntry := job{
+		sector: sector,
+		job:    jobId,
+		start:  time.Now(),
+	}
+
+	go func() {
+		ctx := context.Background()
+
+		var res storage.Proof
+		var cerr *storiface.CallError
+
+		defer func() {
+			if err := w.ret.ReturnSealCommit2(ctx, callId, res, cerr); err != nil {
+				// todo retry
+				log.Warnw("returning job", "error", err)
+			}
+
+			log.Infow("job returned", "call", callId, "took", time.Now().Sub(jobEntry.start))
+		}()
+
+		for {
+			time.Sleep(PollingInterval)
+
+			st, err := prov.requestStatus(ctx, w.host, jobId)
+			if err != nil {
+				log.Warnw("querying job status error", "provider", prov.peer.ID, "call", callId, "error", err)
+				continue
+			}
+
+			if st.Status == snarky.StatusInProgress {
+				// todo timeout
+				continue
+			}
+
+			switch st.Status {
+			case snarky.StatusDone, snarky.StatusFailed:
+				if st.Result != nil {
+					res = st.Result.Proof
+				}
+				if st.Error != "" {
+					cerr = &storiface.CallError{
+						Code:    storiface.ErrUnknown,
+						Message: st.Error, // todo safe string
+					}
+				}
+
+				return
+			}
+		}
+	}()
+
+	return callId, nil
 }
 
 // Unsupported
