@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/filecoin-project/go-address"
+	addr "github.com/filecoin-project/go-address"
 	cborutil "github.com/filecoin-project/go-cbor-util"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
@@ -22,7 +23,7 @@ var log = logging.Logger("proversvc")
 
 const ProvServProtocol = "provingserver"
 const ProvServPriceProtocol = "provingserverprice"
-const ProvServStatusProtocol = "provingserverprice"
+const ProvServStatusProtocol = "provingserverstatus"
 
 const (
 	ProofClassProveCommit = iota
@@ -93,6 +94,7 @@ type PriceResponse struct {
 	Accept bool
 
 	Price abi.TokenAmount
+	Addr  addr.Address
 
 	Address address.Address
 

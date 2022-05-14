@@ -1,13 +1,17 @@
 package sealmarket
 
 import (
+	"bytes"
 	"context"
+	addr "github.com/filecoin-project/go-address"
 	"sort"
 
 	"github.com/filecoin-project/lotus/snarky"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/xerrors"
+	"time"
 
 	"github.com/ipfs/go-cid"
 
@@ -17,9 +21,10 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 )
 
+var log = logging.Logger("sealmarket")
+
 // TODO pass in host
 func NewWorkerCalls(ctx context.Context, totallyDecentralizedURL string) (*WorkerCalls, error) {
-
 	providers, err := DiscoverProviders(ctx, totallyDecentralizedURL)
 	if err != nil {
 		return nil, err
@@ -30,13 +35,15 @@ func NewWorkerCalls(ctx context.Context, totallyDecentralizedURL string) (*Worke
 }
 
 type WorkerCalls struct {
-	host host.Host
+	host       host.Host
+	clientAddr addr.Address
 
 	providers []provider
 }
 
 type provider struct {
 	peer peer.AddrInfo
+
 	jobs map[snarky.JobID]job
 
 	success, fail int
@@ -48,6 +55,36 @@ func (p *provider) successRatio() float64 {
 	}
 
 	return float64(p.success) / float64(p.success+p.fail)
+}
+
+func (p *provider) queryPrice(ctx context.Context, h host.Host, spt abi.RegisteredSealProof) (abi.TokenAmount, error) {
+	ctx, done := context.WithTimeout(ctx, 5*time.Second)
+	defer done()
+
+	// todo addrinfo to peerstore
+
+	stream, err := h.NewStream(ctx, p.peer.ID, snarky.ProvServPriceProtocol)
+	if err != nil {
+		return abi.TokenAmount{}, xerrors.Errorf("opening price ask stream: %w", err)
+	}
+
+	defer func() {
+		if err := stream.Close(); err != nil {
+			log.Errorw("closing stream", "err", err)
+		}
+	}()
+
+	req := &snarky.PriceRequest{
+		spt,
+	}
+	var rb bytes.Buffer
+	if err := req.MarshalCBOR(&rb); err != nil {
+		return abi.TokenAmount{}, xerrors.Errorf("marshal price request: %w", err)
+	}
+
+	if _, err := stream.Write(rb.Bytes()); err != nil {
+		return abi.TokenAmount{}, err
+	}
 }
 
 type job struct {
@@ -68,7 +105,6 @@ func (w *WorkerCalls) SealCommit2(ctx context.Context, sector storage.SectorRef,
 
 	provider := w.providers[0]
 
-	w.host.NewStream()
 }
 
 // Unsupported

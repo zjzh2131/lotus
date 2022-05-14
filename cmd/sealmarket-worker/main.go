@@ -414,7 +414,7 @@ type repoType struct {
 var SealMarketRepo repoType
 
 func (repoType) Type() string {
-	return "Worker"
+	return "Sealmarket"
 }
 
 func (repoType) Config() interface{} {
@@ -422,13 +422,13 @@ func (repoType) Config() interface{} {
 }
 
 func (repoType) APIFlags() []string {
-	return []string{"worker-api-url"}
+	return []string{"sealmarket-api-url"}
 }
 
 func (repoType) RepoFlags() []string {
-	return []string{"worker-repo"}
+	return []string{"sealmarket-repo"}
 }
 
 func (repoType) APIInfoEnvVars() (primary string, fallbacks []string, deprecated []string) {
-	return "WORKER_API_INFO", nil, nil
+	return "SEALMARKET_API_INFO", nil, nil
 }
