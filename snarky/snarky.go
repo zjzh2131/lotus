@@ -154,7 +154,7 @@ func (sr SectorRef) ToNative() storage.SectorRef {
 
 type ProveCommitRequest struct {
 	Sector SectorRef
-	C1o    storage.Commit1Out
+	C1o    storage.Commit1Out `maxlen:"33554432"` // 32M
 
 	// params for prove commit
 }
