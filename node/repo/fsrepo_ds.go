@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	dgbadger "github.com/dgraph-io/badger/v2"
+	rpcclient "github.com/nonsense/go-ds-rpcclient"
 	ldbopts "github.com/syndtr/goleveldb/leveldb/opt"
 	"golang.org/x/xerrors"
 
@@ -19,6 +20,7 @@ type dsCtor func(path string, readonly bool) (datastore.Batching, error)
 
 var fsDatastores = map[string]dsCtor{
 	"metadata": levelDs,
+	//"metadata": remoteDs,
 
 	// Those need to be fast for large writes... but also need a really good GC :c
 	"staging": badgerDs, // miner specific
@@ -42,6 +44,10 @@ func levelDs(path string, readonly bool) (datastore.Batching, error) {
 		Strict:      ldbopts.StrictAll,
 		ReadOnly:    readonly,
 	})
+}
+
+func remoteDs(_ string, _ bool) (datastore.Batching, error) {
+	return rpcclient.NewDatastore()
 }
 
 func (fsr *fsLockedRepo) openDatastores(readonly bool) (map[string]datastore.Batching, error) {

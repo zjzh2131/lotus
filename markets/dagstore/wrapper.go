@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
+	rpcclient "github.com/nonsense/go-ds-rpcclient"
 
 	carindex "github.com/ipld/go-car/v2/index"
 
@@ -77,7 +78,8 @@ func NewDAGStore(cfg config.DAGStoreConfig, minerApi MinerAPI, h host.Host) (*da
 		indexDir      = filepath.Join(cfg.RootDir, "index")
 	)
 
-	dstore, err := newDatastore(datastoreDir)
+	//dstore, err := newDatastore(datastoreDir)
+	dstore, err := newRemoteDatastore(datastoreDir)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("failed to create dagstore datastore in %s: %w", datastoreDir, err)
 	}
@@ -118,6 +120,10 @@ func NewDAGStore(cfg config.DAGStoreConfig, minerApi MinerAPI, h host.Host) (*da
 	}
 
 	return dagst, w, nil
+}
+
+func newRemoteDatastore(_ string) (ds.Batching, error) {
+	return rpcclient.NewDatastore()
 }
 
 // newDatastore creates a datastore under the given base directory
