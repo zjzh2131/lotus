@@ -336,6 +336,8 @@ func (m *Manager) DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, 
 
 	selector := newTaskSelector()
 
+	log.Warnf("got datacid call with piece size=%d", pieceSize)
+
 	var out abi.PieceInfo
 	err := m.sched.Schedule(ctx, storage.NoSectorRef, sealtasks.TTDataCid, selector, schedNop, func(ctx context.Context, w Worker) error {
 		p, err := m.waitSimpleCall(ctx)(w.DataCid(ctx, pieceSize, pieceData))
@@ -343,7 +345,10 @@ func (m *Manager) DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, 
 			return err
 		}
 		if p != nil {
+
 			out = p.(abi.PieceInfo)
+
+			log.Warnf("got successful piece size=%v piece cid=%v", out.Size, out.PieceCID)
 		}
 		return nil
 	})
