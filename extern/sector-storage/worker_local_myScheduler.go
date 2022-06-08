@@ -9,7 +9,6 @@ import (
 	"github.com/filecoin-project/lotus/my/db/myMongo"
 	"github.com/filecoin-project/lotus/my/myModel"
 	"github.com/filecoin-project/lotus/my/myUtils"
-	"github.com/filecoin-project/specs-storage/storage"
 	"golang.org/x/xerrors"
 	"strconv"
 	"time"
@@ -46,7 +45,7 @@ func (l *LocalWorker) myResourceEnough() bool {
 
 func (l *LocalWorker) myGetSuitableTask() (*myModel.SealingTask, error) {
 	var task *myModel.SealingTask
-	tasks, err := myMongo.FindTasks("pending")
+	tasks, err := myMongo.FindByStatus("pending")
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +63,11 @@ func (l *LocalWorker) myAssignmentTask(task *myModel.SealingTask) error {
 		if err != nil {
 			return err
 		}
-	case "":
+	case "seal/v0/precommit/1":
+		err := l.myP1Task(task)
+		if err != nil {
+			return err
+		}
 	default:
 		return xerrors.New("myWorkerScheduler: not an executable task type")
 	}
@@ -77,15 +80,7 @@ func (l *LocalWorker) myAPTask(task *myModel.SealingTask) error {
 		fmt.Println("l.executor() err:", err)
 		return err
 	}
-	sid := storage.SectorRef{
-		ID: abi.SectorID{
-			Miner:  abi.ActorID(task.MinerId),
-			Number: abi.SectorNumber(task.SectorId),
-		},
-		ProofType: 5,
-	}
 	var param0 myModel.APParam0
-	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
 	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
 	size, _ := strconv.Atoi(task.TaskParameters[1])
 	fmt.Println("--------------------------------------p0----------------------------------", param0)
@@ -93,7 +88,7 @@ func (l *LocalWorker) myAPTask(task *myModel.SealingTask) error {
 
 	myMongo.UpdateStatus(task.ID, "running")
 
-	piece, err := sb.AddPiece(context.TODO(), sid, param0, abi.UnpaddedPieceSize(size), nullreader.NewNullReader(abi.UnpaddedPieceSize(size)))
+	piece, err := sb.AddPiece(context.TODO(), task.SectorRef, param0, abi.UnpaddedPieceSize(size), nullreader.NewNullReader(abi.UnpaddedPieceSize(size)))
 	if err != nil {
 		return err
 	}
@@ -105,5 +100,28 @@ func (l *LocalWorker) myAPTask(task *myModel.SealingTask) error {
 	myUtils.WriteFileString("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
 	myUtils.WriteFileString(string(strPiece))
 	myUtils.WriteFileString("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+	return nil
+}
+
+func (l *LocalWorker) myP1Task(task *myModel.SealingTask) error {
+	sb, err := l.executor()
+	if err != nil {
+		fmt.Println("l.executor() err:", err)
+		return err
+	}
+
+	var param0 abi.SealRandomness
+	var param1 []abi.PieceInfo
+	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	_ = json.Unmarshal([]byte(task.TaskParameters[1]), &param1)
+
+	p1Out, err := sb.SealPreCommit1(context.TODO(), task.SectorRef, param0, param1)
+	if err != nil {
+		return err
+	}
+	fmt.Println("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-p1Out:", p1Out)
+	p1OutByte, _ := json.Marshal(p1Out)
+	myMongo.UpdateStatus(task.ID, "done")
+	myMongo.UpdateResult(task.ID, string(p1OutByte))
 	return nil
 }

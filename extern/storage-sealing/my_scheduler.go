@@ -30,7 +30,7 @@ func (m *Sealing) myScheduler() {
 
 func (m *Sealing) myGetDoneTask() (*myModel.SealingTask, error) {
 	var task *myModel.SealingTask
-	tasks, err := myMongo.FindTasks("done")
+	tasks, err := myMongo.FindByStatus("done")
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (m *Sealing) myAssignmentTask(task *myModel.SealingTask) error {
 func (m *Sealing) myAPDone(task *myModel.SealingTask) error {
 	var msg []abi.PieceInfo
 	_ = json.Unmarshal([]byte(task.TaskResult), &msg)
-	err := m.sectors.Send(task.SectorId, SectorPacked{FillerPieces: msg})
+	err := m.sectors.Send(task.SectorRef.ID.Number, SectorPacked{FillerPieces: msg})
 	if err != nil {
 		fmt.Println("-------------------------------err!!!:::", err)
 		return err

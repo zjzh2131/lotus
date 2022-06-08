@@ -383,8 +383,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	//}
 
 	task := myModel.SealingTask{
-		SectorId:       uint64(sector.ID.Number),
-		MinerId:        uint64(sector.ID.Miner),
+		SectorRef:      sector,
 		TaskParameters: []string{},
 		WorkerIp:       "",
 		WorkerPath:     "",
@@ -425,7 +424,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	for {
 		time.Sleep(10 * time.Second)
 		var task *myModel.SealingTask
-		tasks, err := myMongo.FindTasks("done")
+		tasks, err := myMongo.FindBySIdTypeStatus(uint64(sector.ID.Number), string(sealtasks.TTAddPiece), "done")
 		if err != nil {
 		}
 		if len(tasks) != 0 {
@@ -441,54 +440,98 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 }
 
 func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (out storage.PreCommit1Out, err error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	//ctx, cancel := context.WithCancel(ctx)
+	//defer cancel()
 
-	wk, wait, cancel, err := m.getWork(ctx, sealtasks.TTPreCommit1, sector, ticket, pieces)
-	if err != nil {
-		return nil, xerrors.Errorf("getWork: %w", err)
-	}
-	defer cancel()
+	//wk, wait, cancel, err := m.getWork(ctx, sealtasks.TTPreCommit1, sector, ticket, pieces)
+	//if err != nil {
+	//	return nil, xerrors.Errorf("getWork: %w", err)
+	//}
+	//defer cancel()
 
-	var waitErr error
-	waitRes := func() {
-		p, werr := m.waitWork(ctx, wk)
-		if werr != nil {
-			waitErr = werr
-			return
-		}
-		if p != nil {
-			out = p.(storage.PreCommit1Out)
-		}
-	}
+	//var waitErr error
+	//waitRes := func() {
+	//	p, werr := m.waitWork(ctx, wk)
+	//	if werr != nil {
+	//		waitErr = werr
+	//		return
+	//	}
+	//	if p != nil {
+	//		out = p.(storage.PreCommit1Out)
+	//	}
+	//}
 
-	if wait { // already in progress
-		waitRes()
-		return out, waitErr
-	}
+	//if wait { // already in progress
+	//	waitRes()
+	//	return out, waitErr
+	//}
 
-	if err := m.index.StorageLock(ctx, sector.ID, storiface.FTUnsealed, storiface.FTSealed|storiface.FTCache); err != nil {
-		return nil, xerrors.Errorf("acquiring sector lock: %w", err)
-	}
+	//if err := m.index.StorageLock(ctx, sector.ID, storiface.FTUnsealed, storiface.FTSealed|storiface.FTCache); err != nil {
+	//	return nil, xerrors.Errorf("acquiring sector lock: %w", err)
+	//}
 
 	// TODO: also consider where the unsealed data sits
 
-	selector := newAllocSelector(m.index, storiface.FTCache|storiface.FTSealed, storiface.PathSealing)
+	//selector := newAllocSelector(m.index, storiface.FTCache|storiface.FTSealed, storiface.PathSealing)
 
-	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit1, selector, m.schedFetch(sector, storiface.FTUnsealed, storiface.PathSealing, storiface.AcquireMove), func(ctx context.Context, w Worker) error {
-		err := m.startWork(ctx, w, wk)(w.SealPreCommit1(ctx, sector, ticket, pieces))
-		if err != nil {
-			return err
-		}
-
-		waitRes()
-		return nil
-	})
+	task := myModel.SealingTask{
+		SectorRef:      sector,
+		TaskParameters: []string{},
+		WorkerIp:       "",
+		WorkerPath:     "",
+		StartTime:      time.Now().UnixMilli(),
+		EndTime:        0,
+		TaskType:       string(sealtasks.TTPreCommit1),
+		TaskError:      "",
+		TaskResult:     "",
+		TaskStatus:     "pending",
+		TaskTime:       0,
+		NodeId:         0,
+		ClusterId:      0,
+		CreatedAt:      time.Now().UnixMilli(),
+		CreatedBy:      "host+ip",
+		UpdatedAt:      0,
+		UpdatedBy:      "",
+	}
+	b1, _ := json.Marshal(ticket)
+	b2, _ := json.Marshal(pieces)
+	task.TaskParameters = append(task.TaskParameters, string(b1))
+	task.TaskParameters = append(task.TaskParameters, string(b2))
+	_, err = myMongo.Insert("sealing_tasks", &task)
 	if err != nil {
-		return nil, err
+		log.Error("myScheduler add task err:", err)
 	}
 
-	return out, waitErr
+	for {
+		time.Sleep(10 * time.Second)
+		var task *myModel.SealingTask
+		tasks, err := myMongo.FindBySIdTypeStatus(uint64(sector.ID.Number), string(sealtasks.TTPreCommit1), "pending")
+		if err != nil {
+			continue
+		}
+		if len(tasks) != 0 {
+			task = tasks[0]
+			_ = json.Unmarshal([]byte(task.TaskResult), &out)
+			fmt.Println("______________________________________________out:", out)
+			myMongo.UpdateStatus(task.ID, "send_out")
+			break
+		}
+	}
+
+	//err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit1, selector, m.schedFetch(sector, storiface.FTUnsealed, storiface.PathSealing, storiface.AcquireMove), func(ctx context.Context, w Worker) error {
+	//	err := m.startWork(ctx, w, wk)(w.SealPreCommit1(ctx, sector, ticket, pieces))
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	waitRes()
+	//	return nil
+	//})
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	return out, nil
 }
 
 func (m *Manager) SealPreCommit2(ctx context.Context, sector storage.SectorRef, phase1Out storage.PreCommit1Out) (out storage.SectorCids, err error) {

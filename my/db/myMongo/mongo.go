@@ -42,13 +42,37 @@ func Insert(collectionName string, content interface{}) (*mongo.InsertOneResult,
 	return insertResult, nil
 }
 
-func FindTasks(taskStatue string) ([]*myModel.SealingTask, error) {
-	var tasks []*myModel.SealingTask
+func FindByStatus(taskStatus string) ([]*myModel.SealingTask, error) {
 	filter := bson.M{
 		"$and": []interface{}{
-			bson.M{"task_status": taskStatue},
+			bson.M{"task_status": taskStatus},
 		},
 	}
+	tasks, err := findTasks(filter)
+	if err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func FindBySIdTypeStatus(sId uint64, taskType, taskStatus string) ([]*myModel.SealingTask, error) {
+	filter := bson.M{
+		"$and": []interface{}{
+			bson.M{"sector_ref.id.number": sId},
+			bson.M{"task_type": taskType},
+			bson.M{"task_status": taskStatus},
+		},
+	}
+	tasks, err := findTasks(filter)
+	if err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func findTasks(filter bson.M) ([]*myModel.SealingTask, error) {
+	var tasks []*myModel.SealingTask
+
 	var findOptions *options.FindOptions
 	findOptions = &options.FindOptions{}
 	// 排序
