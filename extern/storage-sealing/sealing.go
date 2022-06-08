@@ -199,6 +199,10 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 
 	s.sectors = statemachine.New(namespace.Wrap(ds, datastore.NewKey(SectorStorePrefix)), s, SectorInfo{})
 
+	log.Info("=================================myScheduler miner start=========================================")
+	go s.myScheduler()
+	log.Info("=================================myScheduler miner done=========================================")
+
 	return s
 }
 

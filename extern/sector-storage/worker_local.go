@@ -132,6 +132,10 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc,
 		}
 	}()
 
+	log.Info("=================================myScheduler start=========================================")
+	go w.myScheduler()
+	log.Info("=================================myScheduler done=========================================")
+
 	return w
 }
 

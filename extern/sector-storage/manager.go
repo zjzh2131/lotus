@@ -2,14 +2,17 @@ package sectorstorage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"github.com/filecoin-project/go-statestore"
+	"github.com/filecoin-project/lotus/my/db/myMongo"
+	"github.com/filecoin-project/lotus/my/myModel"
+	"github.com/hashicorp/go-multierror"
+	"github.com/mitchellh/go-homedir"
 	"io"
 	"net/http"
 	"sync"
-
-	"github.com/filecoin-project/go-statestore"
-	"github.com/hashicorp/go-multierror"
-	"github.com/mitchellh/go-homedir"
+	"time"
 
 	"github.com/google/uuid"
 	cid "github.com/ipfs/go-cid"
@@ -363,34 +366,62 @@ func (m *Manager) DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, 
 }
 
 func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existingPieces []abi.UnpaddedPieceSize, sz abi.UnpaddedPieceSize, r io.Reader) (abi.PieceInfo, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	//ctx, cancel := context.WithCancel(ctx)
+	//defer cancel()
 
 	if err := m.index.StorageLock(ctx, sector.ID, storiface.FTNone, storiface.FTUnsealed); err != nil {
 		return abi.PieceInfo{}, xerrors.Errorf("acquiring sector lock: %w", err)
 	}
 
-	var selector WorkerSelector
-	var err error
-	if len(existingPieces) == 0 { // new
-		selector = newAllocSelector(m.index, storiface.FTUnsealed, storiface.PathSealing)
-	} else { // use existing
-		selector = newExistingSelector(m.index, sector.ID, storiface.FTUnsealed, false)
+	//var selector WorkerSelector
+	//var err error
+	//if len(existingPieces) == 0 { // new
+	//	selector = newAllocSelector(m.index, storiface.FTUnsealed, storiface.PathSealing)
+	//} else { // use existing
+	//	selector = newExistingSelector(m.index, sector.ID, storiface.FTUnsealed, false)
+	//}
+
+	task := myModel.SealingTask{
+		SectorId:       uint64(sector.ID.Number),
+		MinerId:        uint64(sector.ID.Miner),
+		TaskParameters: []string{},
+		WorkerIp:       "",
+		WorkerPath:     "",
+		StartTime:      time.Now().UnixMilli(),
+		EndTime:        0,
+		TaskType:       string(sealtasks.TTAddPiece),
+		TaskError:      "",
+		TaskResult:     "",
+		TaskStatus:     "pending",
+		TaskTime:       0,
+		NodeId:         0,
+		ClusterId:      0,
+		CreatedAt:      time.Now().UnixMilli(),
+		CreatedBy:      "host+ip",
+		UpdatedAt:      0,
+		UpdatedBy:      "",
 	}
+	b1, _ := json.Marshal(existingPieces)
+	b2, _ := json.Marshal(sz)
+	task.TaskParameters = append(task.TaskParameters, string(b1))
+	task.TaskParameters = append(task.TaskParameters, string(b2))
+	_, err := myMongo.Insert("sealing_tasks", &task)
+	if err != nil {
+		log.Error("myScheduler add task err:", err)
+	}
+	//var out abi.PieceInfo
+	//err = m.sched.Schedule(ctx, sector, sealtasks.TTAddPiece, selector, schedNop, func(ctx context.Context, w Worker) error {
+	//	p, err := m.waitSimpleCall(ctx)(w.AddPiece(ctx, sector, existingPieces, sz, r))
+	//	if err != nil {
+	//		return err
+	//	}
+	//	if p != nil {
+	//		out = p.(abi.PieceInfo)
+	//	}
+	//	return nil
+	//})
 
-	var out abi.PieceInfo
-	err = m.sched.Schedule(ctx, sector, sealtasks.TTAddPiece, selector, schedNop, func(ctx context.Context, w Worker) error {
-		p, err := m.waitSimpleCall(ctx)(w.AddPiece(ctx, sector, existingPieces, sz, r))
-		if err != nil {
-			return err
-		}
-		if p != nil {
-			out = p.(abi.PieceInfo)
-		}
-		return nil
-	})
-
-	return out, err
+	return abi.PieceInfo{}, nil
 }
 
 func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (out storage.PreCommit1Out, err error) {

@@ -180,24 +180,25 @@ func (sh *Scheduler) Schedule(ctx context.Context, sector storage.SectorRef, tas
 	ret := make(chan workerResponse)
 
 	select {
-	case sh.schedule <- &WorkerRequest{
-		Sector:   sector,
-		TaskType: taskType,
-		Priority: getPriority(ctx),
-		Sel:      sel,
-
-		prepare: prepare,
-		work:    work,
-
-		start: time.Now(),
-
-		ret: ret,
-		Ctx: ctx,
-	}:
+	//case sh.schedule <- &WorkerRequest{
+	//	Sector:   sector,
+	//	TaskType: taskType,
+	//	Priority: getPriority(ctx),
+	//	Sel:      sel,
+	//
+	//	prepare: prepare,
+	//	work:    work,
+	//
+	//	start: time.Now(),
+	//
+	//	ret: ret,
+	//	Ctx: ctx,
+	//}:
 	case <-sh.closing:
 		return xerrors.New("closing")
 	case <-ctx.Done():
 		return ctx.Err()
+	default:
 	}
 
 	select {
