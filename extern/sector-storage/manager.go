@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/filecoin-project/go-statestore"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
 	"github.com/filecoin-project/lotus/my/myModel"
@@ -420,8 +421,23 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	//	}
 	//	return nil
 	//})
+	var out abi.PieceInfo
+	for {
+		time.Sleep(10 * time.Second)
+		var task *myModel.SealingTask
+		tasks, err := myMongo.FindTasks("done")
+		if err != nil {
+		}
+		if len(tasks) != 0 {
+			task = tasks[0]
+			_ = json.Unmarshal([]byte(task.TaskResult), &out)
+			fmt.Println("______________________________________________out:", out)
+			myMongo.UpdateStatus(task.ID, "send_out")
+			break
+		}
+	}
 
-	return abi.PieceInfo{}, nil
+	return out, nil
 }
 
 func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (out storage.PreCommit1Out, err error) {
