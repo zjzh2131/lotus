@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/filecoin-project/lotus/my/myModel"
+	"github.com/filecoin-project/lotus/my/myUtils"
+	"github.com/filecoin-project/specs-storage/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"time"
@@ -117,6 +119,55 @@ func UpdateResult(objId primitive.ObjectID, result string) error {
 	update := bson.M{}
 	update["$set"] = bson.M{"task_result": result}
 	_, err := MongoHandler.Collection("sealing_tasks").UpdateByID(context.TODO(), objId, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func UpdateError(objId primitive.ObjectID, errStr string) error {
+	update := bson.M{}
+	update["$set"] = bson.M{"task_error": errStr}
+	_, err := MongoHandler.Collection("sealing_tasks").UpdateByID(context.TODO(), objId, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func InitTask(sector storage.SectorRef, taskType string, taskStatus string, taskParameters ...interface{}) error {
+	task := myModel.SealingTask{
+		SectorRef:      sector,
+		TaskParameters: []string{},
+		TaskType:       taskType,
+		TaskError:      "",
+		TaskResult:     "",
+		TaskStatus:     taskStatus,
+
+		WorkerIp:   "",
+		WorkerPath: "",
+		StartTime:  0,
+		EndTime:    0,
+		TaskTime:   0,
+
+		NodeId:    0,
+		ClusterId: 0,
+
+		CreatedAt: time.Now().UnixMilli(),
+		CreatedBy: "",
+		UpdatedAt: 0,
+		UpdatedBy: "",
+	}
+	for i, tp := range taskParameters {
+		fmt.Println(i, tp)
+		tpStr, err := myUtils.Interface2Json(tp)
+		if err != nil {
+			return err
+		}
+		fmt.Println(tpStr)
+		task.TaskParameters = append(task.TaskParameters, tpStr)
+	}
+	_, err := Insert("sealing_tasks", &task)
 	if err != nil {
 		return err
 	}

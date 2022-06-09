@@ -8,7 +8,7 @@ import (
 	"github.com/filecoin-project/lotus/extern/storage-sealing/lib/nullreader"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
 	"github.com/filecoin-project/lotus/my/myModel"
-	"github.com/filecoin-project/lotus/my/myUtils"
+	"github.com/filecoin-project/specs-storage/storage"
 	"golang.org/x/xerrors"
 	"strconv"
 	"time"
@@ -68,6 +68,26 @@ func (l *LocalWorker) myAssignmentTask(task *myModel.SealingTask) error {
 		if err != nil {
 			return err
 		}
+	case "seal/v0/precommit/2":
+		err := l.myP2Task(task)
+		if err != nil {
+			return err
+		}
+	case "seal/v0/commit/1":
+		err := l.myC1Task(task)
+		if err != nil {
+			return err
+		}
+	case "seal/v0/commit/2":
+		err := l.myC2Task(task)
+		if err != nil {
+			return err
+		}
+	case "seal/v0/finalize":
+		err := l.myFinalizeSectorTask(task)
+		if err != nil {
+			return err
+		}
 	default:
 		return xerrors.New("myWorkerScheduler: not an executable task type")
 	}
@@ -83,8 +103,6 @@ func (l *LocalWorker) myAPTask(task *myModel.SealingTask) error {
 	var param0 myModel.APParam0
 	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
 	size, _ := strconv.Atoi(task.TaskParameters[1])
-	fmt.Println("--------------------------------------p0----------------------------------", param0)
-	fmt.Println("--------------------------------------p1----------------------------------", size)
 
 	myMongo.UpdateStatus(task.ID, "running")
 
@@ -96,10 +114,6 @@ func (l *LocalWorker) myAPTask(task *myModel.SealingTask) error {
 	strPiece, _ := json.Marshal(piece)
 	myMongo.UpdateStatus(task.ID, "done")
 	myMongo.UpdateResult(task.ID, string(strPiece))
-	fmt.Println("======================================out======================================", piece)
-	myUtils.WriteFileString("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
-	myUtils.WriteFileString(string(strPiece))
-	myUtils.WriteFileString("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
 	return nil
 }
 
@@ -119,9 +133,94 @@ func (l *LocalWorker) myP1Task(task *myModel.SealingTask) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-p1Out:", p1Out)
 	p1OutByte, _ := json.Marshal(p1Out)
 	myMongo.UpdateStatus(task.ID, "done")
 	myMongo.UpdateResult(task.ID, string(p1OutByte))
+	return nil
+}
+
+func (l *LocalWorker) myP2Task(task *myModel.SealingTask) error {
+	sb, err := l.executor()
+	if err != nil {
+		fmt.Println("l.executor() err:", err)
+		return err
+	}
+
+	var param0 storage.PreCommit1Out
+	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+
+	p2Out, err := sb.SealPreCommit2(context.TODO(), task.SectorRef, param0)
+	if err != nil {
+		return err
+	}
+	p2OutByte, _ := json.Marshal(p2Out)
+	myMongo.UpdateStatus(task.ID, "done")
+	myMongo.UpdateResult(task.ID, string(p2OutByte))
+	return nil
+}
+
+func (l *LocalWorker) myC1Task(task *myModel.SealingTask) error {
+	sb, err := l.executor()
+	if err != nil {
+		fmt.Println("l.executor() err:", err)
+		return err
+	}
+
+	var param0 abi.SealRandomness
+	var param1 abi.InteractiveSealRandomness
+	var param2 []abi.PieceInfo
+	var param3 storage.SectorCids
+	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	_ = json.Unmarshal([]byte(task.TaskParameters[1]), &param1)
+	_ = json.Unmarshal([]byte(task.TaskParameters[2]), &param2)
+	_ = json.Unmarshal([]byte(task.TaskParameters[3]), &param3)
+
+	c1Out, err := sb.SealCommit1(context.TODO(), task.SectorRef, param0, param1, param2, param3)
+	if err != nil {
+		return err
+	}
+	c1OutByte, _ := json.Marshal(c1Out)
+	myMongo.UpdateStatus(task.ID, "done")
+	myMongo.UpdateResult(task.ID, string(c1OutByte))
+	return nil
+}
+
+func (l *LocalWorker) myC2Task(task *myModel.SealingTask) error {
+	sb, err := l.executor()
+	if err != nil {
+		fmt.Println("l.executor() err:", err)
+		return err
+	}
+
+	var param0 storage.Commit1Out
+	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+
+	c1Out, err := sb.SealCommit2(context.TODO(), task.SectorRef, param0)
+	if err != nil {
+		return err
+	}
+	c1OutByte, _ := json.Marshal(c1Out)
+	myMongo.UpdateStatus(task.ID, "done")
+	myMongo.UpdateResult(task.ID, string(c1OutByte))
+	return nil
+}
+
+func (l *LocalWorker) myFinalizeSectorTask(task *myModel.SealingTask) error {
+	sb, err := l.executor()
+	if err != nil {
+		fmt.Println("l.executor() err:", err)
+		return err
+	}
+
+	var param0 []storage.Range
+	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+
+	err = sb.FinalizeSector(context.TODO(), task.SectorRef, param0)
+	if err != nil {
+		myMongo.UpdateError(task.ID, err.Error())
+		myMongo.UpdateStatus(task.ID, "done")
+		return nil
+	}
+	myMongo.UpdateStatus(task.ID, "done")
 	return nil
 }

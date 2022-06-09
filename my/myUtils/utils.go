@@ -2,6 +2,7 @@ package myUtils
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -42,4 +43,12 @@ func WriteFileString(out string) {
 	write.WriteString(out + "\n")
 	//Flush将缓存的文件真正写入到文件中
 	write.Flush()
+}
+
+func Interface2Json(i interface{}) (string, error) {
+	marshal, err := json.Marshal(i)
+	if err != nil {
+		return "", err
+	}
+	return string(marshal), nil
 }

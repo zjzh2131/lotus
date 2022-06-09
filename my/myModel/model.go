@@ -69,3 +69,5 @@ type SealingTask struct {
 type APParam0 []abi.UnpaddedPieceSize
 
 type APParam1 abi.UnpaddedPieceSize
+
+type MyFinalizeSectorOut struct{}

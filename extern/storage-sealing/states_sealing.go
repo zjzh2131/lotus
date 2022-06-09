@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/filecoin-project/go-commp-utils/zerocomm"
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
@@ -89,18 +90,15 @@ func (m *Sealing) padSector(ctx context.Context, sectorID storage.SectorRef, exi
 
 	out := make([]abi.PieceInfo, len(sizes))
 	for i, size := range sizes {
-		fmt.Println("==================================================================i:", i)
-		// mySchedule edit
-		//expectCid := zerocomm.ZeroPieceCommitment(size)
+		expectCid := zerocomm.ZeroPieceCommitment(size)
 
 		ppi, err := m.sealer.AddPiece(ctx, sectorID, existingPieceSizes, size, nullreader.NewNullReader(size))
 		if err != nil {
 			return nil, xerrors.Errorf("add piece: %w", err)
 		}
-		// mySchedule edit
-		//if !expectCid.Equals(ppi.PieceCID) {
-		//	return nil, xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
-		//}
+		if !expectCid.Equals(ppi.PieceCID) {
+			return nil, xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
+		}
 
 		existingPieceSizes = append(existingPieceSizes, size)
 
@@ -267,6 +265,7 @@ func (m *Sealing) handlePreCommit1(ctx statemachine.Context, sector SectorInfo) 
 }
 
 func (m *Sealing) handlePreCommit2(ctx statemachine.Context, sector SectorInfo) error {
+	fmt.Println("=======================================================going===========================================================")
 	cids, err := m.sealer.SealPreCommit2(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.PreCommit1Out)
 	if err != nil {
 		return ctx.Send(SectorSealPreCommit2Failed{xerrors.Errorf("seal pre commit(2) failed: %w", err)})
