@@ -148,33 +148,44 @@ type localWorkerPathProvider struct {
 	op storiface.AcquireMode
 }
 
+//func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector storage.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, sealing storiface.PathType) (storiface.SectorPaths, func(), error) {
+//	paths, storageIDs, err := l.w.storage.AcquireSector(ctx, sector, existing, allocate, sealing, l.op)
+//	if err != nil {
+//		return storiface.SectorPaths{}, nil, err
+//	}
+//
+//	releaseStorage, err := l.w.localStore.Reserve(ctx, sector, allocate, storageIDs, storiface.FSOverheadSeal)
+//	if err != nil {
+//		return storiface.SectorPaths{}, nil, xerrors.Errorf("reserving storage space: %w", err)
+//	}
+//
+//	log.Debugf("acquired sector %d (e:%d; a:%d): %v", sector, existing, allocate, paths)
+//
+//	return paths, func() {
+//		releaseStorage()
+//
+//		for _, fileType := range pathTypes {
+//			if fileType&allocate == 0 {
+//				continue
+//			}
+//
+//			sid := storiface.PathByType(storageIDs, fileType)
+//			if err := l.w.sindex.StorageDeclareSector(ctx, storiface.ID(sid), sector.ID, fileType, l.op == storiface.AcquireMove); err != nil {
+//				log.Errorf("declare sector error: %+v", err)
+//			}
+//		}
+//	}, nil
+//}
+
 func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector storage.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, sealing storiface.PathType) (storiface.SectorPaths, func(), error) {
-	paths, storageIDs, err := l.w.storage.AcquireSector(ctx, sector, existing, allocate, sealing, l.op)
-	if err != nil {
-		return storiface.SectorPaths{}, nil, err
-	}
-
-	releaseStorage, err := l.w.localStore.Reserve(ctx, sector, allocate, storageIDs, storiface.FSOverheadSeal)
-	if err != nil {
-		return storiface.SectorPaths{}, nil, xerrors.Errorf("reserving storage space: %w", err)
-	}
-
-	log.Debugf("acquired sector %d (e:%d; a:%d): %v", sector, existing, allocate, paths)
-
-	return paths, func() {
-		releaseStorage()
-
-		for _, fileType := range pathTypes {
-			if fileType&allocate == 0 {
-				continue
-			}
-
-			sid := storiface.PathByType(storageIDs, fileType)
-			if err := l.w.sindex.StorageDeclareSector(ctx, storiface.ID(sid), sector.ID, fileType, l.op == storiface.AcquireMove); err != nil {
-				log.Errorf("declare sector error: %+v", err)
-			}
-		}
-	}, nil
+	return storiface.SectorPaths{
+		ID:          sector.ID,
+		Unsealed:    "/home/lotus/.lotusminer/unsealed/s-t01000-2",
+		Sealed:      "/home/lotus/.lotusminer/sealed/s-t01000-2",
+		Cache:       "/home/lotus/.lotusminer/cache/s-t01000-2",
+		Update:      "",
+		UpdateCache: "",
+	}, func() {}, nil
 }
 
 func (l *LocalWorker) ffiExec() (ffiwrapper.Storage, error) {

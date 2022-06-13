@@ -35,6 +35,11 @@ func (l *LocalWorker) myScheduler() {
 			return
 		}
 
+		//err = l.myAssignmentProcess(task)
+		//if err != nil {
+		//	return
+		//}
+
 		time.Sleep(10 * time.Second)
 	}
 }
@@ -56,13 +61,21 @@ func (l *LocalWorker) myGetSuitableTask() (*myModel.SealingTask, error) {
 	return nil, xerrors.New("no new task")
 }
 
+// 1.0
+/*-------------------------------------------------------------------------------------*/
+
 func (l *LocalWorker) myAssignmentTask(task *myModel.SealingTask) error {
 	switch task.TaskType {
 	case "seal/v0/addpiece":
-		err := l.myAPTask(task)
-		if err != nil {
-			return err
-		}
+		//err := l.myAPTask(task)
+		//if err != nil {
+		//	return err
+		//}
+		t, _ := json.Marshal(task)
+		lw, _ := json.Marshal(l)
+		go func() {
+			callChildProcess([]string{"seal/v0/addpiece", string(lw), string(t)})
+		}()
 	case "seal/v0/precommit/1":
 		err := l.myP1Task(task)
 		if err != nil {
@@ -224,3 +237,5 @@ func (l *LocalWorker) myFinalizeSectorTask(task *myModel.SealingTask) error {
 	myMongo.UpdateStatus(task.ID, "done")
 	return nil
 }
+
+/*-------------------------------------------------------------------------------------*/

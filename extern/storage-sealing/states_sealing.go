@@ -3,7 +3,6 @@ package sealing
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"github.com/filecoin-project/go-commp-utils/zerocomm"
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
@@ -265,7 +264,6 @@ func (m *Sealing) handlePreCommit1(ctx statemachine.Context, sector SectorInfo) 
 }
 
 func (m *Sealing) handlePreCommit2(ctx statemachine.Context, sector SectorInfo) error {
-	fmt.Println("=======================================================going===========================================================")
 	cids, err := m.sealer.SealPreCommit2(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.PreCommit1Out)
 	if err != nil {
 		return ctx.Send(SectorSealPreCommit2Failed{xerrors.Errorf("seal pre commit(2) failed: %w", err)})
