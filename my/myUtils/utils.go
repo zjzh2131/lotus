@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"reflect"
 	"runtime"
@@ -51,4 +52,22 @@ func Interface2Json(i interface{}) (string, error) {
 		return "", err
 	}
 	return string(marshal), nil
+}
+
+func GetLocalIPv4s() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+
+	for _, a := range addrs {
+		// 检查ip地址判断是否回环地址
+		if ipNet, ok := a.(*net.IPNet); ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+			if strings.HasPrefix(ipNet.IP.String(), "192.168") {
+				return ipNet.IP.String()
+			}
+		}
+	}
+
+	return ""
 }

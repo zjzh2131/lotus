@@ -392,11 +392,33 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	//	return nil
 	//})
 
+	// TODO 多次AddPiece
+
 	var err error
-	err = myMongo.InitTask(sector, string(sealtasks.TTAddPiece), "pending", []interface{}{existingPieces, sz}...)
-	if err != nil {
-		fmt.Println(err)
-		return abi.PieceInfo{}, err
+
+	s, _ := myMongo.FindSectorsBySid(uint64(sector.ID.Number))
+	if s != nil {
+		err = myMongo.InitTask(sector, string(sealtasks.TTAddPiece), "pending", []interface{}{existingPieces, sz}...)
+		if err != nil {
+			fmt.Println(err)
+			return abi.PieceInfo{}, err
+		}
+	} else {
+		err := myMongo.Transaction(func() error {
+			err = myMongo.InitSector(sector, "CC", "")
+			if err != nil {
+				return err
+			}
+
+			err = myMongo.InitTask(sector, string(sealtasks.TTAddPiece), "pending", []interface{}{existingPieces, sz}...)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return abi.PieceInfo{}, err
+		}
 	}
 
 	var out abi.PieceInfo
@@ -752,6 +774,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		return err
 	}
 
+	// // TODO go migrate()
 	return nil
 }
 

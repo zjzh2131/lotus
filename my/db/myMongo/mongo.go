@@ -8,6 +8,9 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/x/bsonx"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -16,6 +19,13 @@ import (
 
 var (
 	MongoHandler *mongo.Database
+)
+
+const (
+	SealingTasks    = "sealing_tasks"
+	SealingTaskLogs = "sealing_task_logs"
+	Sectors         = "sectors"
+	Machines        = "machines"
 )
 
 func init() {
@@ -105,6 +115,30 @@ func findTasks(filter bson.M) ([]*myModel.SealingTask, error) {
 	return tasks, nil
 }
 
+func FindByObjId(objId string) (*myModel.SealingTask, error) {
+	hex, err := primitive.ObjectIDFromHex(objId)
+	if err != nil {
+		return nil, err
+	}
+	filter := bson.M{"_id": hex}
+	tasks, err := findTasks(filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(tasks) == 0 {
+		return nil, err
+	}
+	return tasks[0], nil
+}
+
+func updateById(collectionName string, objId primitive.ObjectID, update bson.M) error {
+	_, err := MongoHandler.Collection(collectionName).UpdateByID(context.TODO(), objId, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func UpdateStatus(objId primitive.ObjectID, state string) error {
 	update := bson.M{}
 	update["$set"] = bson.M{"task_status": state}
@@ -135,6 +169,19 @@ func UpdateError(objId primitive.ObjectID, errStr string) error {
 	return nil
 }
 
+func UpdateTaskResStatus(objId primitive.ObjectID, state, res string) error {
+	update := bson.M{}
+	update["$set"] = bson.D{
+		bson.E{Key: "task_result", Value: res},
+		bson.E{Key: "task_status", Value: state},
+	}
+	_, err := MongoHandler.Collection(SealingTasks).UpdateByID(context.TODO(), objId, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func InitTask(sector storage.SectorRef, taskType string, taskStatus string, taskParameters ...interface{}) error {
 	task := myModel.SealingTask{
 		SectorRef:      sector,
@@ -146,15 +193,15 @@ func InitTask(sector storage.SectorRef, taskType string, taskStatus string, task
 
 		WorkerIp:   "",
 		WorkerPath: "",
-		StartTime:  0,
-		EndTime:    0,
-		TaskTime:   0,
 
-		NodeId:    0,
-		ClusterId: 0,
+		StartTime: 0,
+		EndTime:   0,
+
+		NodeId:    "",
+		ClusterId: "",
 
 		CreatedAt: time.Now().UnixMilli(),
-		CreatedBy: "",
+		CreatedBy: "t0" + strconv.Itoa(int(sector.ID.Miner)),
 		UpdatedAt: 0,
 		UpdatedBy: "",
 	}
@@ -172,4 +219,154 @@ func InitTask(sector storage.SectorRef, taskType string, taskStatus string, task
 		return err
 	}
 	return nil
+}
+
+func InitSector(sector storage.SectorRef, sectorType string, sectorStatus string) error {
+	s := myModel.Sector{
+		SectorId:     uint64(sector.ID.Number),
+		SectorStatus: sectorStatus,
+		SectorType:   sectorType,
+
+		NodeId:    "",
+		ClusterId: "",
+
+		CreatedAt: time.Now().UnixMilli(),
+		CreatedBy: "",
+		UpdatedAt: 0,
+		UpdatedBy: "",
+	}
+	_, err := Insert("sectors", &s)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func InsertTaskLog(task *myModel.SealingTask, workerIp string) (string, error) {
+	tl := myModel.SealingTaskLog{
+		SectorRef:      task.SectorRef,
+		WorkerIp:       workerIp,
+		WorkerPath:     "",
+		StartTime:      time.Now().UnixMilli(),
+		EndTime:        0,
+		TaskParameters: nil,
+		TaskType:       task.TaskType,
+		TaskError:      task.TaskError,
+		TaskStatus:     task.TaskType,
+
+		NodeId:    "",
+		ClusterId: "",
+
+		CreatedAt: time.Now().UnixMilli(),
+		CreatedBy: workerIp,
+		UpdatedAt: 0,
+		UpdatedBy: "",
+	}
+	insertResult, err := Insert("sealing_task_logs", &tl)
+	id := fmt.Sprintf("%v", insertResult.InsertedID)
+	id = strings.Split(id, `"`)[1]
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func UpdateTaskLog(objId string, update bson.M) error {
+	hex, err := primitive.ObjectIDFromHex(objId)
+	if err != nil {
+		return err
+	}
+	err = updateById(SealingTaskLogs, hex, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func Transaction(transFunc func() error) error {
+	err := MongoHandler.Client().UseSession(context.TODO(), func(sessionContext mongo.SessionContext) error {
+		var err error
+		err = sessionContext.StartTransaction()
+		if err != nil {
+			return err
+		}
+
+		err = transFunc()
+		if err != nil {
+			sessionContext.AbortTransaction(sessionContext)
+			return err
+		}
+
+		sessionContext.CommitTransaction(sessionContext)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func FindSectorsBySid(sid uint64) (*myModel.Sector, error) {
+	var out myModel.Sector
+	var err error
+
+	filter := bson.M{"sector_id": sid}
+	singleResult := MongoHandler.Collection("sectors").FindOne(context.TODO(), filter)
+	if err = singleResult.Err(); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if err = singleResult.Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func FindUnFinalTask() ([]int, error) {
+	pipeline := mongo.Pipeline{
+		bson.D{
+
+			{"$match", bson.D{
+				{"hierachy", bsonx.Regex("^0,4", "im")},
+			}},
+		},
+		bson.D{
+			{"$group", bson.D{
+				{"_id", "$worker_ip"},
+				{"_id", "$cluster_id"},
+				{"_id", "$sector_ref.id.number"},
+				{"count", bson.D{{"$sum", 1}}},
+			}},
+		},
+		bson.D{
+			{"$match", bson.M{
+				"count": bson.M{"$lt": 10},
+			}},
+			{"$sort", bson.D{{"sum", -1}}},
+		},
+		bson.D{
+			{"$project", bson.D{
+				{"sector_ref.id.number", 1},
+			}},
+		},
+	}
+
+	opt := &options.AggregateOptions{}
+	findResults, err := MongoHandler.Collection(SealingTaskLogs).Aggregate(context.TODO(), pipeline, opt)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer findResults.Close(context.TODO())
+
+	var results []bson.M
+	if err = findResults.All(context.TODO(), &results); err != nil {
+	}
+	fmt.Println(results)
+	//for _, result := range results {
+	//	fmt.Println(result)
+	//}
+	return []int{}, nil
 }

@@ -10,8 +10,18 @@ import (
 	"github.com/filecoin-project/lotus/my/myModel"
 	"github.com/filecoin-project/specs-storage/storage"
 	"golang.org/x/xerrors"
+	"os/exec"
 	"strconv"
+	"strings"
 	"time"
+)
+
+var (
+	runningAp = 0
+	runningP1 = 0
+	runningP2 = 0
+	runningC1 = 0
+	runningC2 = 0
 )
 
 func (l *LocalWorker) myScheduler() {
@@ -35,11 +45,6 @@ func (l *LocalWorker) myScheduler() {
 			return
 		}
 
-		//err = l.myAssignmentProcess(task)
-		//if err != nil {
-		//	return
-		//}
-
 		time.Sleep(10 * time.Second)
 	}
 }
@@ -49,6 +54,11 @@ func (l *LocalWorker) myResourceEnough() bool {
 }
 
 func (l *LocalWorker) myGetSuitableTask() (*myModel.SealingTask, error) {
+	// TODO option suitable task
+	// 优先级
+	// 1. 任务时间太长的
+	// 2. 绑定任务
+	// 3. 新任务
 	var task *myModel.SealingTask
 	tasks, err := myMongo.FindByStatus("pending")
 	if err != nil {
@@ -71,36 +81,91 @@ func (l *LocalWorker) myAssignmentTask(task *myModel.SealingTask) error {
 		//if err != nil {
 		//	return err
 		//}
-		t, _ := json.Marshal(task)
-		lw, _ := json.Marshal(l)
+		//go func() {
+		//	id := fmt.Sprintf("%v", task.ID)
+		//	id = strings.Split(id, `"`)[1]
+		//	cmd("myApTask", id)
+		//}()
+		id := fmt.Sprintf("%v", task.ID)
+		id = strings.Split(id, `"`)[1]
 		go func() {
-			callChildProcess([]string{"seal/v0/addpiece", string(lw), string(t)})
+			callChildProcess([]string{task.TaskType, id})
 		}()
 	case "seal/v0/precommit/1":
-		err := l.myP1Task(task)
-		if err != nil {
-			return err
-		}
+		//err := l.myP1Task(task)
+		//if err != nil {
+		//	return err
+		//}
+		//go func() {
+		//	id := fmt.Sprintf("%v", task.ID)
+		//	id = strings.Split(id, `"`)[1]
+		//	cmd("myP1Task", id)
+		//}()
+		id := fmt.Sprintf("%v", task.ID)
+		id = strings.Split(id, `"`)[1]
+		go func() {
+			callChildProcess([]string{task.TaskType, id})
+		}()
 	case "seal/v0/precommit/2":
-		err := l.myP2Task(task)
-		if err != nil {
-			return err
-		}
+		//err := l.myP2Task(task)
+		//if err != nil {
+		//	return err
+		//}
+		//go func() {
+		//	id := fmt.Sprintf("%v", task.ID)
+		//	id = strings.Split(id, `"`)[1]
+		//	cmd("myP2Task", id)
+		//}()
+		id := fmt.Sprintf("%v", task.ID)
+		id = strings.Split(id, `"`)[1]
+		go func() {
+			callChildProcess([]string{task.TaskType, id})
+		}()
 	case "seal/v0/commit/1":
-		err := l.myC1Task(task)
-		if err != nil {
-			return err
-		}
+		//err := l.myC1Task(task)
+		//if err != nil {
+		//	return err
+		//}
+		//go func() {
+		//	id := fmt.Sprintf("%v", task.ID)
+		//	id = strings.Split(id, `"`)[1]
+		//	cmd("myC1Task", id)
+		//}()
+		id := fmt.Sprintf("%v", task.ID)
+		id = strings.Split(id, `"`)[1]
+		go func() {
+			callChildProcess([]string{task.TaskType, id})
+		}()
 	case "seal/v0/commit/2":
-		err := l.myC2Task(task)
-		if err != nil {
-			return err
-		}
+		//err := l.myC2Task(task)
+		//if err != nil {
+		//	return err
+		//}
+		//go func() {
+		//	id := fmt.Sprintf("%v", task.ID)
+		//	id = strings.Split(id, `"`)[1]
+		//	cmd("myC2Task", id)
+		//}()
+		id := fmt.Sprintf("%v", task.ID)
+		id = strings.Split(id, `"`)[1]
+		go func() {
+			callChildProcess([]string{task.TaskType, id})
+		}()
 	case "seal/v0/finalize":
-		err := l.myFinalizeSectorTask(task)
-		if err != nil {
-			return err
-		}
+		//err := l.myFinalizeSectorTask(task)
+		//if err != nil {
+		//	return err
+		//}
+		//go func() {
+		//	id := fmt.Sprintf("%v", task.ID)
+		//	id = strings.Split(id, `"`)[1]
+		//	cmd("myFinalizeSectorTask", id)
+		//}()
+		id := fmt.Sprintf("%v", task.ID)
+		id = strings.Split(id, `"`)[1]
+		go func() {
+			callChildProcess([]string{task.TaskType, id})
+		}()
 	default:
 		return xerrors.New("myWorkerScheduler: not an executable task type")
 	}
@@ -239,3 +304,11 @@ func (l *LocalWorker) myFinalizeSectorTask(task *myModel.SealingTask) error {
 }
 
 /*-------------------------------------------------------------------------------------*/
+
+func cmd(taskType string, taskId string) {
+	cmd := exec.Command("/home/lotus/projects/myfilecoin/lotus/lotus-worker", "tasks", taskType, taskId)
+	err := cmd.Run()
+	if err != nil {
+		log.Fatalf("failed to call cmd.Run(): %v", err)
+	}
+}

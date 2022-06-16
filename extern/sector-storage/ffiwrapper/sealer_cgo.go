@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/bits"
 	"os"
@@ -229,6 +230,8 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 			return abi.PieceInfo{}, xerrors.Errorf("opening unsealed sector file: %w", err)
 		}
 	}
+
+	fmt.Printf("------------------------------------------------AddPiece File Path: %#v", stagedPath)
 
 	w, err := stagedFile.Writer(storiface.UnpaddedByteIndex(offset).Padded(), pieceSize.Padded())
 	if err != nil {
@@ -711,6 +714,8 @@ func (sb *Sealer) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 	}
 	defer done()
 
+	fmt.Printf("------------------------------------------------SealPreCommit1 File Path: %#v", paths)
+
 	e, err := os.OpenFile(paths.Sealed, os.O_RDWR|os.O_CREATE, 0644) // nolint:gosec
 	if err != nil {
 		return nil, xerrors.Errorf("ensuring sealed file exists: %w", err)
@@ -782,6 +787,8 @@ func (sb *Sealer) SealPreCommit2(ctx context.Context, sector storage.SectorRef, 
 	}
 	defer done()
 
+	fmt.Printf("------------------------------------------------SealPreCommit2 File Path: %#v", paths)
+
 	sealedCID, unsealedCID, err := ffi.SealPreCommitPhase2(phase1Out, paths.Cache, paths.Sealed)
 	if err != nil {
 		return storage.SectorCids{}, xerrors.Errorf("presealing sector %d (%s): %w", sector.ID.Number, paths.Unsealed, err)
@@ -843,6 +850,9 @@ func (sb *Sealer) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 		return nil, xerrors.Errorf("acquire sector paths: %w", err)
 	}
 	defer done()
+
+	fmt.Printf("------------------------------------------------SealCommit1 File Path: %#v", paths)
+
 	output, err := ffi.SealCommitPhase1(
 		sector.ProofType,
 		cids.Sealed,
