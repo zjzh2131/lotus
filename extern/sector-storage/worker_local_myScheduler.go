@@ -89,7 +89,6 @@ func (sc *SchedulerControl) myScheduler() {
 			sc.lk.Lock()
 			ok, err := myMongo.FindAndModifyForStatus(task.ID, "pending", "running")
 			if err != nil {
-				fmt.Println("===========================================:errrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr")
 				sc.lk.Unlock()
 				continue
 			}
@@ -105,7 +104,6 @@ func (sc *SchedulerControl) myScheduler() {
 			select {
 			case sc.ApP1 <- struct{}{}:
 			case <-outTick.C:
-				fmt.Println("dqwwwwwwwwwwwwwwwwwwwwwwww:P1 chao l e")
 				continue
 			}
 			sc.lk.Lock()
