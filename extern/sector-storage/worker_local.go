@@ -132,8 +132,25 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc,
 		}
 	}()
 
+	sc = &SchedulerControl{
+		lk:        &sync.Mutex{},
+		AP:        make(chan taskReq, 10),
+		P1:        make(chan taskReq, 10),
+		P2:        make(chan taskReq, 10),
+		C1:        make(chan taskReq, 10),
+		C2:        make(chan taskReq, 10),
+		FZ:        make(chan taskReq, 10),
+		ApP1:      make(chan struct{}, 2),
+		P2C2:      make(chan struct{}, 2),
+		SealingM:  make(map[int]struct{}, 3),
+		SealingCh: make(chan struct{}, 3),
+		closing:   w.closing,
+	}
+
 	log.Info("=================================myScheduler start=========================================")
-	go w.myScheduler()
+	//go w.myScheduler()
+	go sc.myScheduler()
+	go sc.myCallChildProcess()
 	log.Info("=================================myScheduler done=========================================")
 
 	return w

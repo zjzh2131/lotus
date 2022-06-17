@@ -23,10 +23,6 @@ import (
 	"strconv"
 )
 
-type cmdInfo struct {
-	l *LocalWorker
-}
-
 func init() {
 	myReexec.Register("seal/v0/addpiece", func() error {
 		var err error
@@ -87,14 +83,15 @@ func init() {
 	}
 }
 
-func callChildProcess(args []string) {
+func callChildProcess(args []string) error {
 	cmd := reexec.Command(args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		log.Panicf("failed to run command: %s", err)
+		return err
 	}
+	return nil
 }
 
 func ap(taskId string) error {
@@ -116,10 +113,10 @@ func ap(taskId string) error {
 	if err != nil {
 		return err
 	}
-	err = myMongo.UpdateStatus(task.ID, "running")
-	if err != nil {
-		return err
-	}
+	//err = myMongo.UpdateStatus(task.ID, "running")
+	//if err != nil {
+	//	return err
+	//}
 
 	piece, err := sb.AddPiece(context.TODO(), task.SectorRef, param0, abi.UnpaddedPieceSize(size), nullreader.NewNullReader(abi.UnpaddedPieceSize(size)))
 	if err != nil {
@@ -166,10 +163,10 @@ func p1(taskId string) error {
 		return err
 	}
 
-	err = myMongo.UpdateStatus(task.ID, "running")
-	if err != nil {
-		return err
-	}
+	//err = myMongo.UpdateStatus(task.ID, "running")
+	//if err != nil {
+	//	return err
+	//}
 
 	p1Out, err := sb.SealPreCommit1(context.TODO(), task.SectorRef, param0, param1)
 	if err != nil {
@@ -212,10 +209,10 @@ func p2(taskId string) error {
 		return err
 	}
 
-	err = myMongo.UpdateStatus(task.ID, "running")
-	if err != nil {
-		return err
-	}
+	//err = myMongo.UpdateStatus(task.ID, "running")
+	//if err != nil {
+	//	return err
+	//}
 
 	p2Out, err := sb.SealPreCommit2(context.TODO(), task.SectorRef, param0)
 	if err != nil {
@@ -263,10 +260,10 @@ func c1(taskId string) error {
 		return err
 	}
 
-	err = myMongo.UpdateStatus(task.ID, "running")
-	if err != nil {
-		return err
-	}
+	//err = myMongo.UpdateStatus(task.ID, "running")
+	//if err != nil {
+	//	return err
+	//}
 
 	c1Out, err := sb.SealCommit1(context.TODO(), task.SectorRef, param0, param1, param2, param3)
 	if err != nil {
@@ -309,10 +306,10 @@ func c2(taskId string) error {
 		return err
 	}
 
-	err = myMongo.UpdateStatus(task.ID, "running")
-	if err != nil {
-		return err
-	}
+	//err = myMongo.UpdateStatus(task.ID, "running")
+	//if err != nil {
+	//	return err
+	//}
 
 	c1Out, err := sb.SealCommit2(context.TODO(), task.SectorRef, param0)
 	if err != nil {
@@ -355,10 +352,10 @@ func fs(taskId string) error {
 		return err
 	}
 
-	err = myMongo.UpdateStatus(task.ID, "running")
-	if err != nil {
-		return err
-	}
+	//err = myMongo.UpdateStatus(task.ID, "running")
+	//if err != nil {
+	//	return err
+	//}
 
 	err = sb.FinalizeSector(context.TODO(), task.SectorRef, param0)
 	if err != nil {
