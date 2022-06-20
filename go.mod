@@ -169,6 +169,7 @@ require (
 
 require (
 	github.com/docker/docker v20.10.17+incompatible
+	github.com/go-redis/redis v6.15.9+incompatible
 	go.mongodb.org/mongo-driver v1.9.1
 )
 

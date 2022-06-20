@@ -81,6 +81,20 @@ func FindBySIdTypeStatus(sId uint64, taskType, taskStatus string) ([]*myModel.Se
 	return tasks, nil
 }
 
+func FindBySIdStatus(sId uint64, taskStatus string) ([]*myModel.SealingTask, error) {
+	filter := bson.M{
+		"$and": []interface{}{
+			bson.M{"sector_ref.id.number": sId},
+			bson.M{"task_status": taskStatus},
+		},
+	}
+	tasks, err := findTasks(filter)
+	if err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
 func findTasks(filter bson.M) ([]*myModel.SealingTask, error) {
 	var tasks []*myModel.SealingTask
 
@@ -324,43 +338,30 @@ func FindSectorsBySid(sid uint64) (*myModel.Sector, error) {
 	return &out, nil
 }
 
-func FindUnfinishedSectorTasks() ([]int, error) {
+func FindSmallerSectorId(sids []uint64, sidCap uint64, taskStatus string) ([]uint64, error) {
 	pipeline := mongo.Pipeline{
-		//bson.D{
-		//	{"$match", bson.D{
-		//		{"worker", "192.168.0.128"},
-		//	}},
-		//},
-		bson.D{
-			{"$group", bson.D{
-				{"_id", bson.D{
-					{"sid", "$sector_ref.id.number"},
-					{"task_type", "$task_type"},
-				}},
-				{"count", bson.D{{"$sum", 1}}},
-			}},
-		},
-		bson.D{
-			{"$group", bson.D{
-				{"_id", "$_id.sid"},
-				{"count", bson.D{{"$sum", 1}}},
-			}},
-		},
 		bson.D{
 			{"$match", bson.D{
-				{"count", bson.M{"$lt": 10}},
+				{"sector_ref.id.number", bson.M{"$nin": sids}},
+				{"task_status", taskStatus},
 			}},
 		},
-		//bson.D{
-		//	{"$sort", bson.D{
-		//		{"count", bson.M{"$lt": 10}},
-		//	}},
-		//},
-		//bson.D{
-		//	{"$project", bson.D{
-		//		{"count", 0},
-		//	}},
-		//},
+		bson.D{
+			{"$group", bson.D{
+				{"_id", "$sector_ref.id.number"},
+			}},
+		},
+		bson.D{
+			{"$sort", bson.M{"_id": 1}},
+		},
+		bson.D{
+			{"$limit", sidCap},
+		},
+		bson.D{
+			{"$project", bson.D{
+				{"_id", 1},
+			}},
+		},
 	}
 
 	opt := &options.AggregateOptions{}
@@ -370,16 +371,22 @@ func FindUnfinishedSectorTasks() ([]int, error) {
 	}
 	defer findResults.Close(context.TODO())
 
-	var out []int
+	var out []uint64
 	for findResults.Next(context.TODO()) {
-		//var sid sid
-		//findResults.Decode(&sid)
-		//out = append(out, sid.Sid)
-		var m map[string]interface{}
-		findResults.Decode(&m)
-		fmt.Println("?", m)
+		var sid sid
+		//var m map[string]interface{}
+		err := findResults.Decode(&sid)
+		if err != nil {
+			fmt.Println(err)
+			return nil, err
+		}
+		out = append(out, sid.ID)
 	}
 	return out, nil
+}
+
+type sid struct {
+	ID uint64 `json:"id" bson:"_id,omitempty"` // ObjectId
 }
 
 func FindBySid() {
@@ -401,74 +408,6 @@ func FindBySid() {
 	//return &out, nil
 }
 
-type sid struct {
-	Sid int `json:"id" bson:"_id,omitempty"` // ObjectId
-}
-
-func Nimasile() ([]int, error) {
-	pipeline := mongo.Pipeline{
-		bson.D{
-			{"$match", bson.D{
-				{"sector_ref.id.number", 2},
-				//{"task_status", "pending"},
-			}},
-		},
-
-		bson.D{
-			{"$group", bson.D{
-				{"_id", bson.D{
-					{"sid", "$sector_ref.id.number"},
-					{"task_type", "$task_type"},
-				}},
-				{"created_at", "$created_at"},
-				{"last_xxx", bson.M{"$last": "$_id"}},
-				{"count", bson.D{{"$sum", 1}}},
-			}},
-		},
-
-		//bson.D{
-		//	{"$sort", bson.D{
-		//		{"created_at", -1},
-		//	}},
-		//},
-		//bson.D{
-		//	{"$group", bson.D{
-		//		{"_id", "$_id.sid"},
-		//		{"count", bson.D{{"$sum", 1}}},
-		//	}},
-		//},
-		//bson.D{
-		//	{"$match", bson.D{
-		//		{"count", bson.M{"$lt": 10}},
-		//	}},
-		//},
-
-		//bson.D{
-		//	{"$project", bson.D{
-		//		{"count", 0},
-		//	}},
-		//},
-	}
-
-	opt := &options.AggregateOptions{}
-	findResults, err := MongoHandler.Collection(SealingTaskLogs).Aggregate(context.TODO(), pipeline, opt)
-	if err != nil {
-		return nil, err
-	}
-	defer findResults.Close(context.TODO())
-
-	var out []int
-	for findResults.Next(context.TODO()) {
-		//var sid sid
-		//findResults.Decode(&sid)
-		//out = append(out, sid.Sid)
-		var m map[string]interface{}
-		findResults.Decode(&m)
-		fmt.Println("?", m)
-	}
-	return out, nil
-}
-
 func FindAndModifyForStatus(objId primitive.ObjectID, oldTaskStatus, newTaskStatus string) (ok bool, err error) {
 	filter := bson.M{
 		"$and": []interface{}{
@@ -488,10 +427,18 @@ func FindAndModifyForStatus(objId primitive.ObjectID, oldTaskStatus, newTaskStat
 		}
 		return false, err
 	}
-	//var updatedDocument bson.M
-	//if err = singleResult.Decode(&updatedDocument); err != nil {
-	//	return false, err
-	//}
-	//fmt.Println(updatedDocument)
 	return true, nil
+}
+
+func FindTaskByWorkerIp(workerIp string) ([]*myModel.SealingTask, error) {
+	filter := bson.M{
+		"$and": []interface{}{
+			bson.M{"worker_ip": workerIp},
+		},
+	}
+	tasks, err := findTasks(filter)
+	if err != nil {
+		return nil, err
+	}
+	return tasks, nil
 }

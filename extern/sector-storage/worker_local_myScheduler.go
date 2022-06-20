@@ -20,6 +20,14 @@ import (
 
 var sc *SchedulerControl
 
+var (
+	pending = "pending"
+	running = "running"
+	done    = "done"
+	finish  = "finish"
+	failed  = "failed"
+)
+
 type SchedulerControl struct {
 	lk        sync.Locker
 	AP        chan taskReq
@@ -30,7 +38,7 @@ type SchedulerControl struct {
 	FZ        chan taskReq
 	ApP1      chan struct{}
 	P2C2      chan struct{}
-	SealingM  map[int]struct{}
+	SealingM  map[uint64]struct{}
 	SealingCh chan struct{}
 	closing   chan struct{}
 }
@@ -38,7 +46,7 @@ type SchedulerControl struct {
 type taskReq struct {
 	ID       primitive.ObjectID
 	TaskType string
-	SectorId int
+	SectorId uint64
 }
 
 func (sc *SchedulerControl) myScheduler() {
@@ -49,147 +57,49 @@ func (sc *SchedulerControl) myScheduler() {
 		default:
 		}
 
-		restInterval := time.NewTicker(10 * time.Second)
-		select {
-		case <-restInterval.C:
-		}
-		fmt.Println("=========================================================heart==========================================================")
-		// TODO 1. get all pending task
-		tasks, _ := myMongo.FindByStatus("pending")
-		// TODO 2. sort()
-		var task *myModel.SealingTask
-		if len(tasks) != 0 {
-			task = tasks[0]
-		} else {
+		// 分配完任务进入一个短暂的休眠等待任务执行
+		//restInterval := time.NewTicker(10 * time.Second)
+		//select {
+		//case <-restInterval.C:
+		//}
+
+		//myRedis.Lock()
+		// step 1. get all pending task
+		tasks, err := sc.getTask()
+		if err != nil {
 			continue
 		}
-		// step 3. resource placeholder
-		if _, ok := sc.SealingM[int(task.SectorRef.ID.Number)]; !ok {
-			outTick := time.NewTicker(10 * time.Second)
-			select {
-			case sc.SealingCh <- struct{}{}:
-				sc.lk.Lock()
-				sc.SealingM[int(task.SectorRef.ID.Number)] = struct{}{}
-				sc.lk.Unlock()
-			case <-outTick.C:
-				fmt.Println("===========================================:超出sealing限制")
-				continue
-			}
-		}
-		// step 3.1 findAndModify
-		// step 3.2 chan <- taskReq
-		outTick := time.NewTicker(10 * time.Second)
-		switch task.TaskType {
-		case "seal/v0/addpiece":
-			select {
-			case sc.ApP1 <- struct{}{}:
-			case <-outTick.C:
-				continue
-			}
-			sc.lk.Lock()
-			ok, err := myMongo.FindAndModifyForStatus(task.ID, "pending", "running")
-			if err != nil {
-				sc.lk.Unlock()
-				continue
-			}
-			if ok {
-				sc.AP <- taskReq{
-					ID:       task.ID,
-					TaskType: task.TaskType,
-					SectorId: int(task.SectorRef.ID.Number),
+		// TODO 2. sort()
+		for _, task := range tasks {
+			// step 3. resource placeholder
+			if _, ok := sc.SealingM[uint64(task.SectorRef.ID.Number)]; !ok {
+				outTick := time.NewTicker(10 * time.Second)
+				select {
+				case sc.SealingCh <- struct{}{}:
+					sc.lk.Lock()
+					sc.SealingM[uint64(task.SectorRef.ID.Number)] = struct{}{}
+					sc.lk.Unlock()
+				case <-outTick.C:
+					fmt.Println("===========================================:超出sealing限制")
+					continue
 				}
 			}
-			sc.lk.Unlock()
-		case "seal/v0/precommit/1":
-			select {
-			case sc.ApP1 <- struct{}{}:
-			case <-outTick.C:
-				continue
+			// step 3.1 findAndModify
+			// step 3.2 chan <- taskReq
+			switch task.TaskType {
+			case "seal/v0/addpiece":
+				sc.ap(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			case "seal/v0/precommit/1":
+				sc.p1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			case "seal/v0/precommit/2":
+				sc.p2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			case "seal/v0/commit/1":
+				sc.c1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			case "seal/v0/commit/2":
+				sc.c2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			case "seal/v0/finalize":
+				sc.finalizeSector(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
 			}
-			sc.lk.Lock()
-			ok, err := myMongo.FindAndModifyForStatus(task.ID, "pending", "running")
-			if err != nil {
-				sc.lk.Unlock()
-				continue
-			}
-			if ok {
-				sc.P1 <- taskReq{
-					ID:       task.ID,
-					TaskType: task.TaskType,
-					SectorId: int(task.SectorRef.ID.Number),
-				}
-			}
-			sc.lk.Unlock()
-		case "seal/v0/precommit/2":
-			select {
-			case sc.P2C2 <- struct{}{}:
-			case <-outTick.C:
-				continue
-			}
-			sc.lk.Lock()
-			ok, err := myMongo.FindAndModifyForStatus(task.ID, "pending", "running")
-			if err != nil {
-				sc.lk.Unlock()
-				continue
-			}
-			if ok {
-				sc.P2 <- taskReq{
-					ID:       task.ID,
-					TaskType: task.TaskType,
-					SectorId: int(task.SectorRef.ID.Number),
-				}
-			}
-			sc.lk.Unlock()
-		case "seal/v0/commit/1":
-			sc.lk.Lock()
-			ok, err := myMongo.FindAndModifyForStatus(task.ID, "pending", "running")
-			if err != nil {
-				sc.lk.Unlock()
-				continue
-			}
-			if ok {
-				sc.C1 <- taskReq{
-					ID:       task.ID,
-					TaskType: task.TaskType,
-					SectorId: int(task.SectorRef.ID.Number),
-				}
-			}
-			sc.lk.Unlock()
-		case "seal/v0/commit/2":
-			select {
-			case sc.P2C2 <- struct{}{}:
-			case <-outTick.C:
-				continue
-			}
-			sc.lk.Lock()
-			ok, err := myMongo.FindAndModifyForStatus(task.ID, "pending", "running")
-			if err != nil {
-				sc.lk.Unlock()
-				continue
-			}
-			if ok {
-				sc.C2 <- taskReq{
-					ID:       task.ID,
-					TaskType: task.TaskType,
-					SectorId: int(task.SectorRef.ID.Number),
-				}
-			}
-			sc.lk.Unlock()
-		case "seal/v0/finalize":
-			sc.lk.Lock()
-			ok, err := myMongo.FindAndModifyForStatus(task.ID, "pending", "running")
-			if err != nil {
-				sc.lk.Unlock()
-				continue
-			}
-			if ok {
-				sc.FZ <- taskReq{
-					ID:       task.ID,
-					TaskType: task.TaskType,
-					SectorId: int(task.SectorRef.ID.Number),
-				}
-			}
-			sc.lk.Unlock()
 		}
 	}
 }
@@ -205,7 +115,6 @@ func (sc *SchedulerControl) myCallChildProcess() {
 				err := callChildProcess([]string{apReq.TaskType, id})
 				if err != nil {
 					myMongo.UpdateStatus(apReq.ID, "failed")
-					return
 				}
 				<-sc.ApP1
 			}()
@@ -216,7 +125,6 @@ func (sc *SchedulerControl) myCallChildProcess() {
 				err := callChildProcess([]string{p1Req.TaskType, id})
 				if err != nil {
 					myMongo.UpdateStatus(p1Req.ID, "failed")
-					return
 				}
 				<-sc.ApP1
 			}()
@@ -227,7 +135,6 @@ func (sc *SchedulerControl) myCallChildProcess() {
 				err := callChildProcess([]string{p2Req.TaskType, id})
 				if err != nil {
 					myMongo.UpdateStatus(p2Req.ID, "failed")
-					return
 				}
 				<-sc.P2C2
 			}()
@@ -238,7 +145,6 @@ func (sc *SchedulerControl) myCallChildProcess() {
 				err := callChildProcess([]string{c1Req.TaskType, id})
 				if err != nil {
 					myMongo.UpdateStatus(c1Req.ID, "failed")
-					return
 				}
 			}()
 		case c2Req := <-sc.C2:
@@ -248,7 +154,6 @@ func (sc *SchedulerControl) myCallChildProcess() {
 				err := callChildProcess([]string{c2Req.TaskType, id})
 				if err != nil {
 					myMongo.UpdateStatus(c2Req.ID, "failed")
-					return
 				}
 				<-sc.P2C2
 			}()
@@ -259,42 +164,192 @@ func (sc *SchedulerControl) myCallChildProcess() {
 				err := callChildProcess([]string{fzReq.TaskType, id})
 				if err != nil {
 					myMongo.UpdateStatus(fzReq.ID, "failed")
-					return
 				}
 				<-sc.SealingCh
-				delete(sc.SealingM, fzReq.SectorId)
+				delete(sc.SealingM, uint64(fzReq.SectorId))
 			}()
 		}
 	}
 }
 
-//var PriorityMap = map[string]int{
-//	"": 1,
-//}
-//
-//type Priority struct {
-//	SectorId int
-//	TaskType string
-//}
-//
-//type SortingPriorityBucket []Priority
-//
-//func (b SortingPriorityBucket) Sort() {
-//
-//}
-//
-//func (b SortingPriorityBucket) Len() int {
-//	return len(b)
-//}
-//
-//func (b SortingPriorityBucket) Less(i, j int) bool {
-//
-//	return true
-//}
-//
-//func (b SortingPriorityBucket) Swap(i, j int) {
-//	b[i], b[j] = b[j], b[i]
-//}
+func (sc *SchedulerControl) getTask() ([]*myModel.SealingTask, error) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+	needSealing := cap(sc.SealingCh) - len(sc.SealingCh)
+	//needApP1 := cap(sc.ApP1) - len(sc.ApP1)
+	//needP2C2 := cap(sc.P2C2) - len(sc.P2C2)
+	var all []*myModel.SealingTask
+	sids := []uint64{}
+	var err error
+
+	// worker_ip
+	for key := range sc.SealingM {
+		tasks, err := myMongo.FindBySIdStatus(key, pending)
+		if err != nil {
+			return []*myModel.SealingTask{}, err
+		}
+		all = append(all, tasks...)
+		sids = append(sids, key)
+	}
+	// new task
+	if needSealing == 0 {
+		return all, nil
+	}
+	// step 1 control sealing count, option smaller sector id
+	sids, err = myMongo.FindSmallerSectorId(sids, uint64(needSealing), "pending")
+	if err != nil {
+		return []*myModel.SealingTask{}, err
+	}
+	// step 2 control task count
+	for _, v := range sids {
+		tasks, err := myMongo.FindBySIdStatus(v, pending)
+		if err != nil {
+			return []*myModel.SealingTask{}, err
+		}
+		all = append(all, tasks...)
+	}
+	return all, nil
+}
+
+func (sc *SchedulerControl) ap(taskId primitive.ObjectID, taskType string, sid uint64) {
+	outTick := time.NewTicker(10 * time.Second)
+	select {
+	case sc.ApP1 <- struct{}{}:
+	case <-outTick.C:
+		return
+	}
+
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
+	if ok && err == nil {
+		sc.AP <- taskReq{
+			ID:       taskId,
+			TaskType: taskType,
+			SectorId: sid,
+		}
+		return
+	}
+	if err != nil || !ok {
+		<-sc.ApP1
+		return
+	}
+}
+
+func (sc *SchedulerControl) p1(taskId primitive.ObjectID, taskType string, sid uint64) {
+	outTick := time.NewTicker(10 * time.Second)
+	select {
+	case sc.ApP1 <- struct{}{}:
+	case <-outTick.C:
+		return
+	}
+
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
+	if ok && err == nil {
+		sc.P1 <- taskReq{
+			ID:       taskId,
+			TaskType: taskType,
+			SectorId: sid,
+		}
+		return
+	}
+	if err != nil || !ok {
+		<-sc.ApP1
+		return
+	}
+}
+
+func (sc *SchedulerControl) p2(taskId primitive.ObjectID, taskType string, sid uint64) {
+	outTick := time.NewTicker(10 * time.Second)
+	select {
+	case sc.P2C2 <- struct{}{}:
+	case <-outTick.C:
+		return
+	}
+
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
+	if ok && err == nil {
+		sc.P2 <- taskReq{
+			ID:       taskId,
+			TaskType: taskType,
+			SectorId: sid,
+		}
+		return
+	}
+	if err != nil || !ok {
+		<-sc.P2C2
+		return
+	}
+}
+
+func (sc *SchedulerControl) c1(taskId primitive.ObjectID, taskType string, sid uint64) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
+	if err != nil {
+		return
+	}
+	if ok {
+		sc.C1 <- taskReq{
+			ID:       taskId,
+			TaskType: taskType,
+			SectorId: sid,
+		}
+	}
+}
+
+func (sc *SchedulerControl) c2(taskId primitive.ObjectID, taskType string, sid uint64) {
+	outTick := time.NewTicker(10 * time.Second)
+	select {
+	case sc.P2C2 <- struct{}{}:
+	case <-outTick.C:
+		return
+	}
+
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
+	if ok && err == nil {
+		sc.C2 <- taskReq{
+			ID:       taskId,
+			TaskType: taskType,
+			SectorId: sid,
+		}
+		return
+	}
+	if err != nil || !ok {
+		<-sc.P2C2
+		return
+	}
+}
+
+func (sc *SchedulerControl) finalizeSector(taskId primitive.ObjectID, taskType string, sid uint64) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
+	if err != nil {
+		return
+	}
+	if ok {
+		sc.FZ <- taskReq{
+			ID:       taskId,
+			TaskType: taskType,
+			SectorId: sid,
+		}
+	}
+}
+
+// 1.0
+/*-------------------------------------------------------------------------------------*/
 
 func (l *LocalWorker) myScheduler() {
 	time.Sleep(30 * time.Second)
@@ -355,9 +410,6 @@ func (l *LocalWorker) myGetSuitableTask() (*myModel.SealingTask, error) {
 	}
 	return nil, xerrors.New("no new task")
 }
-
-// 1.0
-/*-------------------------------------------------------------------------------------*/
 
 func (l *LocalWorker) myAssignmentTask(task *myModel.SealingTask) error {
 	switch task.TaskType {
