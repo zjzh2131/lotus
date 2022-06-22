@@ -76,7 +76,7 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 	if err != nil {
 		return xerrors.Errorf("filling up the sector (%v): %w", fillerSizes, err)
 	}
-	//return nil
+
 	return ctx.Send(SectorPacked{FillerPieces: fillerPieces})
 }
 

@@ -59,9 +59,14 @@ type SealingTaskLog struct {
 type Sector struct {
 	ID primitive.ObjectID `json:"id" bson:"_id,omitempty"` // ObjectId
 
-	SectorId     uint64 `json:"sector_id" bson:"sector_id"`
-	SectorStatus string `json:"sector_status" bson:"sector_status"`
-	SectorType   string `json:"sector_type" bson:"sector_type"`
+	WorkerIp string `json:"worker_ip" bson:"worker_ip"`
+
+	SectorRef    storage.SectorRef `json:"sector_ref" bson:"sector_ref"`
+	SectorId     uint64            `json:"sector_id" bson:"sector_id"`
+	SectorStatus string            `json:"sector_status" bson:"sector_status"`
+	SectorType   string            `json:"sector_type" bson:"sector_type"` // cc
+
+	StoragePath string `json:"storage_path" bson:"storage_path"`
 
 	NodeId    string `json:"node_id" bson:"node_id"`
 	ClusterId string `json:"cluster_id" bson:"cluster_id"`
@@ -75,11 +80,12 @@ type Sector struct {
 type Machine struct {
 	ID primitive.ObjectID `json:"id" bson:"_id,omitempty"` // ObjectId
 
-	Ip           string       `json:"ip" bson:"ip"`
-	HardwareInfo hardwareInfo `json:"hardware_info" bson:"hardware_info"`
+	Ip           string        `json:"ip" bson:"ip"`
+	HardwareInfo *hardwareInfo `json:"hardware_info" bson:"hardware_info"`
+	ControlInfo  *controlInfo  `json:"control_info" bson:"control_info"`
 
-	Path string `json:"path" bson:"path"`
-	Role string `json:"role" bson:"role"` // lotus/miner/winPost/wdPost/worker/storage
+	Role        string `json:"role" bson:"role"` // lotus/miner/winPost/wdPost/worker/storage
+	StoragePath string `json:"storage_path" bson:"storage_path"`
 
 	NodeId    string `json:"node_id" bson:"node_id"`
 	ClusterId string `json:"cluster_id" bson:"cluster_id"`
@@ -91,6 +97,9 @@ type Machine struct {
 }
 
 type hardwareInfo struct {
+}
+
+type controlInfo struct {
 }
 
 type APParam0 []abi.UnpaddedPieceSize

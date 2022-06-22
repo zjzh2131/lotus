@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/storage-sealing/lib/nullreader"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
 	"github.com/filecoin-project/lotus/my/myModel"
+	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/xerrors"
@@ -63,44 +65,7 @@ func (sc *SchedulerControl) myScheduler() {
 		//case <-restInterval.C:
 		//}
 
-		//myRedis.Lock()
-		// step 1. get all pending task
-		tasks, err := sc.getTask()
-		if err != nil {
-			continue
-		}
-		// TODO 2. sort()
-		for _, task := range tasks {
-			// step 3. resource placeholder
-			if _, ok := sc.SealingM[uint64(task.SectorRef.ID.Number)]; !ok {
-				outTick := time.NewTicker(10 * time.Second)
-				select {
-				case sc.SealingCh <- struct{}{}:
-					sc.lk.Lock()
-					sc.SealingM[uint64(task.SectorRef.ID.Number)] = struct{}{}
-					sc.lk.Unlock()
-				case <-outTick.C:
-					fmt.Println("===========================================:超出sealing限制")
-					continue
-				}
-			}
-			// step 3.1 findAndModify
-			// step 3.2 chan <- taskReq
-			switch task.TaskType {
-			case "seal/v0/addpiece":
-				sc.ap(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
-			case "seal/v0/precommit/1":
-				sc.p1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
-			case "seal/v0/precommit/2":
-				sc.p2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
-			case "seal/v0/commit/1":
-				sc.c1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
-			case "seal/v0/commit/2":
-				sc.c2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
-			case "seal/v0/finalize":
-				sc.finalizeSector(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
-			}
-		}
+		sc.onceScheduler()
 	}
 }
 
@@ -109,65 +74,17 @@ func (sc *SchedulerControl) myCallChildProcess() {
 	for {
 		select {
 		case apReq := <-sc.AP:
-			id := fmt.Sprintf("%v", apReq.ID)
-			id = strings.Split(id, `"`)[1]
-			go func() {
-				err := callChildProcess([]string{apReq.TaskType, id})
-				if err != nil {
-					myMongo.UpdateStatus(apReq.ID, "failed")
-				}
-				<-sc.ApP1
-			}()
+			sc.apCp(apReq)
 		case p1Req := <-sc.P1:
-			id := fmt.Sprintf("%v", p1Req.ID)
-			id = strings.Split(id, `"`)[1]
-			go func() {
-				err := callChildProcess([]string{p1Req.TaskType, id})
-				if err != nil {
-					myMongo.UpdateStatus(p1Req.ID, "failed")
-				}
-				<-sc.ApP1
-			}()
+			sc.p1Cp(p1Req)
 		case p2Req := <-sc.P2:
-			id := fmt.Sprintf("%v", p2Req.ID)
-			id = strings.Split(id, `"`)[1]
-			go func() {
-				err := callChildProcess([]string{p2Req.TaskType, id})
-				if err != nil {
-					myMongo.UpdateStatus(p2Req.ID, "failed")
-				}
-				<-sc.P2C2
-			}()
+			sc.p2Cp(p2Req)
 		case c1Req := <-sc.C1:
-			id := fmt.Sprintf("%v", c1Req.ID)
-			id = strings.Split(id, `"`)[1]
-			go func() {
-				err := callChildProcess([]string{c1Req.TaskType, id})
-				if err != nil {
-					myMongo.UpdateStatus(c1Req.ID, "failed")
-				}
-			}()
+			sc.c1Cp(c1Req)
 		case c2Req := <-sc.C2:
-			id := fmt.Sprintf("%v", c2Req.ID)
-			id = strings.Split(id, `"`)[1]
-			go func() {
-				err := callChildProcess([]string{c2Req.TaskType, id})
-				if err != nil {
-					myMongo.UpdateStatus(c2Req.ID, "failed")
-				}
-				<-sc.P2C2
-			}()
+			sc.c2Cp(c2Req)
 		case fzReq := <-sc.FZ:
-			id := fmt.Sprintf("%v", fzReq.ID)
-			id = strings.Split(id, `"`)[1]
-			go func() {
-				err := callChildProcess([]string{fzReq.TaskType, id})
-				if err != nil {
-					myMongo.UpdateStatus(fzReq.ID, "failed")
-				}
-				<-sc.SealingCh
-				delete(sc.SealingM, uint64(fzReq.SectorId))
-			}()
+			sc.finalizeSectorCp(fzReq)
 		}
 	}
 }
@@ -182,7 +99,7 @@ func (sc *SchedulerControl) getTask() ([]*myModel.SealingTask, error) {
 	sids := []uint64{}
 	var err error
 
-	// worker_ip
+	// old task
 	for key := range sc.SealingM {
 		tasks, err := myMongo.FindBySIdStatus(key, pending)
 		if err != nil {
@@ -192,23 +109,135 @@ func (sc *SchedulerControl) getTask() ([]*myModel.SealingTask, error) {
 		sids = append(sids, key)
 	}
 	// new task
-	if needSealing == 0 {
-		return all, nil
-	}
-	// step 1 control sealing count, option smaller sector id
-	sids, err = myMongo.FindSmallerSectorId(sids, uint64(needSealing), "pending")
-	if err != nil {
-		return []*myModel.SealingTask{}, err
-	}
-	// step 2 control task count
-	for _, v := range sids {
-		tasks, err := myMongo.FindBySIdStatus(v, pending)
+	if needSealing != 0 {
+		sids, err = myMongo.FindSmallerSectorId(sids, uint64(needSealing), "pending")
 		if err != nil {
 			return []*myModel.SealingTask{}, err
 		}
-		all = append(all, tasks...)
+		// step 2 control task count
+		for _, v := range sids {
+			tasks, err := myMongo.FindBySIdStatus(v, pending)
+			if err != nil {
+				return []*myModel.SealingTask{}, err
+			}
+			all = append(all, tasks...)
+		}
 	}
 	return all, nil
+}
+
+func (sc *SchedulerControl) onceGetTask() ([]*myModel.SealingTask, error) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+	needSealing := cap(sc.SealingCh) - len(sc.SealingCh)
+	needApP1 := cap(sc.ApP1) - len(sc.ApP1)
+	//needP2C2 := cap(sc.P2C2) - len(sc.P2C2)
+	needP2 := cap(sc.P2) - len(sc.P2)
+	needC1 := cap(sc.C1) - len(sc.C1)
+	needC2 := cap(sc.C2) - len(sc.C2)
+	needFZ := cap(sc.FZ) - len(sc.FZ)
+
+	var all []*myModel.SealingTask
+	var tasks []*myModel.SealingTask
+	sids := []uint64{}
+	var err error
+
+	// old task
+	for key := range sc.SealingM {
+		sids = append(sids, key)
+	}
+	// new task
+	if needSealing != 0 {
+		s, err := myMongo.GetSmallerSectorId("", "", int64(needSealing))
+		if err != nil {
+			return []*myModel.SealingTask{}, err
+		}
+		myMongo.UpdateSectorsWorkerIp(s, myUtils.GetLocalIPv4s())
+		sids = append(sids, s...)
+	}
+
+	tasks, err = myMongo.GetSuitableTask(sids, []string{string(sealtasks.TTAddPiece), string(sealtasks.TTPreCommit1)}, "pending", int64(needApP1))
+	if err != nil {
+		return nil, err
+	}
+	all = append(all, tasks...)
+
+	tasks, err = myMongo.GetSuitableTask(sids, []string{string(sealtasks.TTPreCommit2)}, "pending", int64(needP2))
+	if err != nil {
+		return nil, err
+	}
+	all = append(all, tasks...)
+
+	tasks, err = myMongo.GetSuitableTask(sids, []string{string(sealtasks.TTCommit1)}, "pending", int64(needC1))
+	if err != nil {
+		return nil, err
+	}
+	all = append(all, tasks...)
+
+	tasks, err = myMongo.GetSuitableTask(sids, []string{string(sealtasks.TTCommit2)}, "pending", int64(needC2))
+	if err != nil {
+		return nil, err
+	}
+	all = append(all, tasks...)
+
+	tasks, err = myMongo.GetSuitableTask(sids, []string{string(sealtasks.TTFinalize)}, "pending", int64(needFZ))
+	if err != nil {
+		return nil, err
+	}
+	all = append(all, tasks...)
+
+	return all, nil
+}
+
+func (sc *SchedulerControl) onceScheduler() error {
+	//ctx := context.TODO()
+	//err := myMongo.MongoLock.XLock(ctx, "global_lock", myMongo.LockId, lock.LockDetails{})
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//defer func() {
+	//	_, err = myMongo.MongoLock.Unlock(ctx, myMongo.LockId)
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
+	//}()
+
+	tasks, err := sc.onceGetTask()
+	if err != nil {
+		return err
+	}
+	for _, task := range tasks {
+		// step 3. resource placeholder
+		if _, ok := sc.SealingM[uint64(task.SectorRef.ID.Number)]; !ok {
+			outTick := time.NewTicker(10 * time.Second)
+			select {
+			case sc.SealingCh <- struct{}{}:
+				sc.lk.Lock()
+				sc.SealingM[uint64(task.SectorRef.ID.Number)] = struct{}{}
+				sc.lk.Unlock()
+			case <-outTick.C:
+				fmt.Println("===========================================:超出sealing限制")
+				continue
+			}
+		}
+		// step 3.1 findAndModify
+		// step 3.2 chan <- taskReq
+		switch task.TaskType {
+		case "seal/v0/addpiece":
+			sc.ap(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+		case "seal/v0/precommit/1":
+			sc.p1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+		case "seal/v0/precommit/2":
+			sc.p2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+		case "seal/v0/commit/1":
+			sc.c1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+		case "seal/v0/commit/2":
+			sc.c2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+		case "seal/v0/finalize":
+			sc.finalizeSector(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+		}
+	}
+	return nil
 }
 
 func (sc *SchedulerControl) ap(taskId primitive.ObjectID, taskType string, sid uint64) {
@@ -346,6 +375,100 @@ func (sc *SchedulerControl) finalizeSector(taskId primitive.ObjectID, taskType s
 			SectorId: sid,
 		}
 	}
+}
+
+func (sc *SchedulerControl) apCp(apReq taskReq) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	id := fmt.Sprintf("%v", apReq.ID)
+	id = strings.Split(id, `"`)[1]
+	go func() {
+		err := callChildProcess([]string{apReq.TaskType, id})
+		if err != nil {
+			myMongo.UpdateStatus(apReq.ID, "failed")
+		}
+		<-sc.ApP1
+	}()
+}
+
+func (sc *SchedulerControl) p1Cp(p1Req taskReq) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	id := fmt.Sprintf("%v", p1Req.ID)
+	id = strings.Split(id, `"`)[1]
+	go func() {
+		err := callChildProcess([]string{p1Req.TaskType, id})
+		if err != nil {
+			myMongo.UpdateStatus(p1Req.ID, "failed")
+		}
+		<-sc.ApP1
+	}()
+}
+
+func (sc *SchedulerControl) p2Cp(p2Req taskReq) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	id := fmt.Sprintf("%v", p2Req.ID)
+	id = strings.Split(id, `"`)[1]
+	go func() {
+		err := callChildProcess([]string{p2Req.TaskType, id})
+		if err != nil {
+			myMongo.UpdateStatus(p2Req.ID, "failed")
+		}
+		<-sc.P2C2
+	}()
+}
+
+func (sc *SchedulerControl) c1Cp(c1Req taskReq) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	id := fmt.Sprintf("%v", c1Req.ID)
+	id = strings.Split(id, `"`)[1]
+	go func() {
+		err := callChildProcess([]string{c1Req.TaskType, id})
+		if err != nil {
+			myMongo.UpdateStatus(c1Req.ID, "failed")
+		}
+	}()
+}
+
+func (sc *SchedulerControl) c2Cp(c2Req taskReq) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	id := fmt.Sprintf("%v", c2Req.ID)
+	id = strings.Split(id, `"`)[1]
+	go func() {
+		err := callChildProcess([]string{c2Req.TaskType, id})
+		if err != nil {
+			myMongo.UpdateStatus(c2Req.ID, "failed")
+		}
+		<-sc.P2C2
+	}()
+}
+
+func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	id := fmt.Sprintf("%v", fzReq.ID)
+	id = strings.Split(id, `"`)[1]
+	go func() {
+		err := callChildProcess([]string{fzReq.TaskType, id})
+		if err != nil {
+			myMongo.UpdateStatus(fzReq.ID, "failed")
+		}
+		// TODO 1. ftp migrate
+		// 2. update sector storage path
+		myMongo.UpdateSectorStoragePath(fzReq.ID, "")
+		myMongo.UpdateSectorStatus(fzReq.SectorId, "living")
+		<-sc.SealingCh
+		delete(sc.SealingM, uint64(fzReq.SectorId))
+	}()
 }
 
 // 1.0

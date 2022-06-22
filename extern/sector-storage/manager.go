@@ -392,15 +392,21 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	//	return nil
 	//})
 
-	// TODO 多次AddPiece
-
 	var err error
-
 	s, _ := myMongo.FindSectorsBySid(uint64(sector.ID.Number))
 	if s != nil {
-		err = myMongo.InitTask(sector, string(sealtasks.TTAddPiece), "pending", []interface{}{existingPieces, sz}...)
+		err := myMongo.Transaction(func() error {
+			err := myMongo.DelTask(sector, string(sealtasks.TTAddPiece), "finish")
+			if err != nil {
+				return err
+			}
+			err = myMongo.InitTask(sector, string(sealtasks.TTAddPiece), "pending", []interface{}{existingPieces, sz}...)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 		if err != nil {
-			fmt.Println(err)
 			return abi.PieceInfo{}, err
 		}
 	} else {
@@ -612,7 +618,6 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 
 	err = myMongo.InitTask(sector, string(sealtasks.TTCommit1), "pending", []interface{}{ticket, seed, pieces, cids}...)
 	if err != nil {
-		fmt.Println(err)
 		return out, err
 	}
 
@@ -669,7 +674,6 @@ func (m *Manager) SealCommit2(ctx context.Context, sector storage.SectorRef, pha
 
 	err = myMongo.InitTask(sector, string(sealtasks.TTCommit2), "pending", []interface{}{phase1Out}...)
 	if err != nil {
-		fmt.Println(err)
 		return out, err
 	}
 
@@ -762,7 +766,6 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	var out myModel.MyFinalizeSectorOut
 	err = myMongo.InitTask(sector, string(sealtasks.TTFinalize), "pending", []interface{}{keepUnsealed}...)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 

@@ -59,7 +59,7 @@ func FindByStatus(taskStatus string) ([]*myModel.SealingTask, error) {
 			bson.M{"task_status": taskStatus},
 		},
 	}
-	tasks, err := findTasks(filter)
+	tasks, err := findTasks(filter, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func FindBySIdTypeStatus(sId uint64, taskType, taskStatus string) ([]*myModel.Se
 			bson.M{"task_status": taskStatus},
 		},
 	}
-	tasks, err := findTasks(filter)
+	tasks, err := findTasks(filter, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -88,14 +88,14 @@ func FindBySIdStatus(sId uint64, taskStatus string) ([]*myModel.SealingTask, err
 			bson.M{"task_status": taskStatus},
 		},
 	}
-	tasks, err := findTasks(filter)
+	tasks, err := findTasks(filter, 0)
 	if err != nil {
 		return nil, err
 	}
 	return tasks, nil
 }
 
-func findTasks(filter bson.M) ([]*myModel.SealingTask, error) {
+func findTasks(filter bson.M, need int64) ([]*myModel.SealingTask, error) {
 	var tasks []*myModel.SealingTask
 
 	var findOptions *options.FindOptions
@@ -105,7 +105,9 @@ func findTasks(filter bson.M) ([]*myModel.SealingTask, error) {
 	sortM["created_at"] = -1
 	findOptions.Sort = sortM
 	// 分页
-	//findOptions.SetLimit(pageSize)
+	if need != 0 {
+		findOptions.SetLimit(need)
+	}
 	//findOptions.SetSkip((pageNum - 1) * pageSize)
 	findResults, err := MongoHandler.Collection("sealing_tasks").Find(context.TODO(), filter, findOptions)
 	if err != nil {
@@ -134,7 +136,7 @@ func FindByObjId(objId string) (*myModel.SealingTask, error) {
 		return nil, err
 	}
 	filter := bson.M{"_id": hex}
-	tasks, err := findTasks(filter)
+	tasks, err := findTasks(filter, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -234,8 +236,22 @@ func InitTask(sector storage.SectorRef, taskType string, taskStatus string, task
 	return nil
 }
 
+func DelTask(sector storage.SectorRef, taskType string, taskStatus string) error {
+	filter := bson.D{
+		{"sector_ref", sector},
+		{"task_type", taskType},
+		{"task_status", taskStatus},
+	}
+	_, err := MongoHandler.Collection(SealingTasks).DeleteOne(context.TODO(), filter)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func InitSector(sector storage.SectorRef, sectorType string, sectorStatus string) error {
 	s := myModel.Sector{
+		SectorRef:    sector,
 		SectorId:     uint64(sector.ID.Number),
 		SectorStatus: sectorStatus,
 		SectorType:   sectorType,
@@ -338,12 +354,40 @@ func FindSectorsBySid(sid uint64) (*myModel.Sector, error) {
 	return &out, nil
 }
 
+func FindSectorsByWorkerIp(workerIp, sectorStatus string) ([]*myModel.Sector, error) {
+	var out []*myModel.Sector
+
+	filter := bson.M{
+		"worker_ip":     workerIp,
+		"sector_status": sectorStatus,
+	}
+	findResults, err := MongoHandler.Collection(Sectors).Find(context.TODO(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err := findResults.Close(context.TODO())
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+	for findResults.Next(context.TODO()) {
+		var machine myModel.Sector
+		err := findResults.Decode(&machine)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, &machine)
+	}
+	return out, nil
+}
+
 func FindSmallerSectorId(sids []uint64, sidCap uint64, taskStatus string) ([]uint64, error) {
 	pipeline := mongo.Pipeline{
 		bson.D{
 			{"$match", bson.D{
 				{"sector_ref.id.number", bson.M{"$nin": sids}},
-				{"task_status", taskStatus},
+				{"worker_ip", taskStatus},
 			}},
 		},
 		bson.D{
@@ -386,7 +430,7 @@ func FindSmallerSectorId(sids []uint64, sidCap uint64, taskStatus string) ([]uin
 }
 
 type sid struct {
-	ID uint64 `json:"id" bson:"_id,omitempty"` // ObjectId
+	ID uint64 `json:"id" bson:"sector_id,omitempty"` // ObjectId
 }
 
 func FindBySid() {
@@ -436,9 +480,178 @@ func FindTaskByWorkerIp(workerIp string) ([]*myModel.SealingTask, error) {
 			bson.M{"worker_ip": workerIp},
 		},
 	}
-	tasks, err := findTasks(filter)
+	tasks, err := findTasks(filter, 0)
 	if err != nil {
 		return nil, err
 	}
 	return tasks, nil
+}
+
+func UpdateSectorStoragePath(objId primitive.ObjectID, storagePath string) error {
+	update := bson.M{}
+	update["$set"] = bson.D{
+		//bson.E{Key: "task_result", Value: res},
+		bson.E{Key: "storage_path", Value: storagePath},
+	}
+	_, err := MongoHandler.Collection(Sectors).UpdateByID(context.TODO(), objId, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func FindMachineByRole(role string) ([]*myModel.Machine, error) {
+	var machines []*myModel.Machine
+	var err error
+
+	filter := bson.M{"role": role}
+	findResults, err := MongoHandler.Collection(Machines).Find(context.TODO(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err := findResults.Close(context.TODO())
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+	for findResults.Next(context.TODO()) {
+		var machine myModel.Machine
+		err := findResults.Decode(&machine)
+		if err != nil {
+			return nil, err
+		}
+		machines = append(machines, &machine)
+	}
+	return machines, nil
+}
+
+func GetSuitableTask(sids []uint64, taskTypes []string, taskStatus string, need int64) ([]*myModel.SealingTask, error) {
+	var tasks []*myModel.SealingTask
+
+	filter := bson.M{
+		"sector_ref.id.number": bson.M{"$in": sids},
+		"task_status":          taskStatus,
+	}
+	orQuery := []bson.M{}
+	for _, v := range taskTypes {
+		orQuery = append(orQuery, bson.M{"task_type": v})
+	}
+	filter["$or"] = orQuery
+
+	findOptions := &options.FindOptions{}
+	// 排序
+	sortM := map[string]interface{}{}
+	sortM["created_at"] = 1
+	findOptions.Sort = sortM
+	// 分页
+	if need != 0 {
+		findOptions.SetLimit(need)
+	}
+	//findOptions.SetSkip((pageNum - 1) * pageSize)
+	findResults, err := MongoHandler.Collection(SealingTasks).Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err := findResults.Close(context.TODO())
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+	for findResults.Next(context.TODO()) {
+		var task myModel.SealingTask
+		err := findResults.Decode(&task)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, &task)
+	}
+	return tasks, nil
+}
+
+func GetSmallerSectorId(sectorStatus, workerIp string, need int64) ([]uint64, error) {
+	var out []uint64
+	filter := bson.M{
+		"worker_ip":     workerIp,
+		"sector_status": sectorStatus,
+	}
+
+	findOptions := &options.FindOptions{}
+	// 排序
+	sortM := map[string]interface{}{}
+	sortM["created_at"] = 1
+	findOptions.Sort = sortM
+	findOptions.SetProjection(bson.D{
+		{"_id", 0},
+		{"sector_id", 1},
+	})
+	// 分页
+	if need != 0 {
+		findOptions.SetLimit(need)
+	}
+	//findOptions.SetSkip((pageNum - 1) * pageSize)
+	findResults, err := MongoHandler.Collection(Sectors).Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err := findResults.Close(context.TODO())
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+	for findResults.Next(context.TODO()) {
+		var s sid
+		err := findResults.Decode(&s)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s.ID)
+	}
+	return out, nil
+}
+
+func UpdateSectorsWorkerIp(sids []uint64, workerIp string) (bool, error) {
+	var err error
+	filter := bson.M{
+		"sector_id": bson.M{"$in": sids},
+	}
+	updater := bson.M{}
+	updater["$set"] = bson.D{
+		bson.E{Key: "worker_ip", Value: workerIp},
+	}
+	_, err = MongoHandler.Collection(Sectors).UpdateMany(context.TODO(), filter, updater)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func UpdateSectorStatus(sid uint64, status string) error {
+	filter := bson.M{
+		"sector_ref.id.number": sid,
+	}
+	update := bson.M{}
+	update["$set"] = bson.D{
+		bson.E{Key: "sector_status", Value: status},
+	}
+	_, err := MongoHandler.Collection(Sectors).UpdateOne(context.TODO(), filter, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func UpdateTask(filter, update interface{}) error {
+	//update := bson.M{}
+	//update["$set"] = bson.D{
+	//	bson.E{Key: "task_result", Value: res},
+	//	bson.E{Key: "task_status", Value: state},
+	//}
+	_, err := MongoHandler.Collection(SealingTasks).UpdateMany(context.TODO(), filter, update)
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -138,7 +138,6 @@ func ap(taskId string) error {
 	if err != nil {
 		return err
 	}
-	//fmt.Println("========================================Piece:", string(strPiece))
 	return nil
 }
 

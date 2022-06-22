@@ -2,9 +2,11 @@ package myCommon
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
 	"github.com/filecoin-project/lotus/my/myModel"
+	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
 	"golang.org/x/xerrors"
 	"sync"
@@ -82,4 +84,29 @@ func assignmentOut(task *myModel.SealingTask, out interface{}) (bool, error) {
 		return false, xerrors.New("myScheduler: This type is not triggered")
 	}
 	return true, nil
+}
+
+func MountAllStorage() {
+	machines, err := myMongo.FindMachineByRole("storage")
+	if err != nil {
+		return
+	}
+	for _, v := range machines {
+		// 	cmd := exec.Command("sudo", "mount", "192.168.0.128:/data/nfs", "/data/mount_nfs1")
+		nfsServer := v.Ip + ":" + v.StoragePath
+		nfsPath := "/data/mount/" + v.Ip
+		exists, err := myUtils.PathExists(nfsPath)
+		if err != nil {
+			e := fmt.Sprintf("mount folder creation error, path: %v\n", nfsPath)
+			panic(e)
+			return
+		}
+		if exists {
+			err := myUtils.MountNfs(nfsPath, nfsServer)
+			if err != nil {
+				e := fmt.Sprintf("mount error, nfsPath: %v, nfsServer: %v\n", nfsPath, nfsServer)
+				panic(e)
+			}
+		}
+	}
 }

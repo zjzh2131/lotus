@@ -3,6 +3,10 @@ package sectorstorage
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/filecoin-project/lotus/my/db/myMongo"
+	"github.com/filecoin-project/lotus/my/myUtils"
+	"go.mongodb.org/mongo-driver/bson"
 	"io"
 	"os"
 	"reflect"
@@ -140,12 +144,37 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc,
 		C1:        make(chan taskReq, 10),
 		C2:        make(chan taskReq, 10),
 		FZ:        make(chan taskReq, 10),
-		ApP1:      make(chan struct{}, 4),
-		P2C2:      make(chan struct{}, 4),
+		ApP1:      make(chan struct{}, 6),
+		P2C2:      make(chan struct{}, 6),
 		SealingM:  make(map[uint64]struct{}, 10),
 		SealingCh: make(chan struct{}, 10),
 		closing:   w.closing,
 	}
+
+	// TODO add map
+	myMongo.Transaction(func() error {
+		var sids []uint64
+		sts, err := myMongo.FindSectorsByWorkerIp(myUtils.GetLocalIPv4s(), "")
+		if err != nil {
+			return err
+		}
+		for _, v := range sts {
+			sids = append(sids, uint64(v.SectorRef.ID.Number))
+		}
+		fmt.Println(sids)
+		filter := bson.M{
+			"sector_ref.id.number": bson.M{"$in": sids},
+		}
+		update := bson.M{}
+		update["$set"] = bson.D{
+			bson.E{Key: "task_status", Value: "failed"},
+		}
+		err = myMongo.UpdateTask(filter, update)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 
 	log.Info("=================================myScheduler start=========================================")
 	//go w.myScheduler()
@@ -165,44 +194,33 @@ type localWorkerPathProvider struct {
 	op storiface.AcquireMode
 }
 
-//func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector storage.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, sealing storiface.PathType) (storiface.SectorPaths, func(), error) {
-//	paths, storageIDs, err := l.w.storage.AcquireSector(ctx, sector, existing, allocate, sealing, l.op)
-//	if err != nil {
-//		return storiface.SectorPaths{}, nil, err
-//	}
-//
-//	releaseStorage, err := l.w.localStore.Reserve(ctx, sector, allocate, storageIDs, storiface.FSOverheadSeal)
-//	if err != nil {
-//		return storiface.SectorPaths{}, nil, xerrors.Errorf("reserving storage space: %w", err)
-//	}
-//
-//	log.Debugf("acquired sector %d (e:%d; a:%d): %v", sector, existing, allocate, paths)
-//
-//	return paths, func() {
-//		releaseStorage()
-//
-//		for _, fileType := range pathTypes {
-//			if fileType&allocate == 0 {
-//				continue
-//			}
-//
-//			sid := storiface.PathByType(storageIDs, fileType)
-//			if err := l.w.sindex.StorageDeclareSector(ctx, storiface.ID(sid), sector.ID, fileType, l.op == storiface.AcquireMove); err != nil {
-//				log.Errorf("declare sector error: %+v", err)
-//			}
-//		}
-//	}, nil
-//}
-
 func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector storage.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, sealing storiface.PathType) (storiface.SectorPaths, func(), error) {
-	return storiface.SectorPaths{
-		ID:          sector.ID,
-		Unsealed:    "/home/lotus/.lotusminer/unsealed/s-t01000-2",
-		Sealed:      "/home/lotus/.lotusminer/sealed/s-t01000-2",
-		Cache:       "/home/lotus/.lotusminer/cache/s-t01000-2",
-		Update:      "",
-		UpdateCache: "",
-	}, func() {}, nil
+	paths, storageIDs, err := l.w.storage.AcquireSector(ctx, sector, existing, allocate, sealing, l.op)
+	if err != nil {
+		return storiface.SectorPaths{}, nil, err
+	}
+
+	releaseStorage, err := l.w.localStore.Reserve(ctx, sector, allocate, storageIDs, storiface.FSOverheadSeal)
+	if err != nil {
+		return storiface.SectorPaths{}, nil, xerrors.Errorf("reserving storage space: %w", err)
+	}
+
+	log.Debugf("acquired sector %d (e:%d; a:%d): %v", sector, existing, allocate, paths)
+
+	return paths, func() {
+		releaseStorage()
+
+		for _, fileType := range pathTypes {
+			if fileType&allocate == 0 {
+				continue
+			}
+
+			sid := storiface.PathByType(storageIDs, fileType)
+			if err := l.w.sindex.StorageDeclareSector(ctx, storiface.ID(sid), sector.ID, fileType, l.op == storiface.AcquireMove); err != nil {
+				log.Errorf("declare sector error: %+v", err)
+			}
+		}
+	}, nil
 }
 
 func (l *LocalWorker) ffiExec() (ffiwrapper.Storage, error) {

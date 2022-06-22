@@ -3,6 +3,8 @@ package stores
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/filecoin-project/lotus/my/db/myMongo"
 	"io/ioutil"
 	"math/bits"
 	"math/rand"
@@ -523,6 +525,18 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 		allocate ^= fileType
 	}
 
+	s, _ := myMongo.FindSectorsBySid(uint64(sid.ID.Number))
+	//b.Root = s.StoragePath
+	if s != nil {
+		if s.WorkerIp != "" {
+			//b.Root = "/data/mount/" + s.WorkerIp
+			//b.Root = "/home/lotus/.lotusminer"
+			folder := fmt.Sprintf("s-t0%v-%v", sid.ID.Miner, sid.ID.Number)
+			out.Cache = "/home/lotus/.lotusminer/cache/" + folder
+			out.Sealed = "/home/lotus/.lotusminer/sealed/" + folder
+			out.Unsealed = "/home/lotus/.lotusminer/unsealed/" + folder
+		}
+	}
 	return out, storageIDs, nil
 }
 
@@ -729,12 +743,14 @@ func (st *Local) GenerateSingleVanillaProof(ctx context.Context, minerID abi.Act
 	var sealed string
 	if si.Update {
 		src, _, err := st.AcquireSector(ctx, sr, storiface.FTUpdate|storiface.FTUpdateCache, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
+		fmt.Printf("=====================================================caice path:%#v\n", src)
 		if err != nil {
 			return nil, xerrors.Errorf("acquire sector: %w", err)
 		}
 		cache, sealed = src.UpdateCache, src.Update
 	} else {
 		src, _, err := st.AcquireSector(ctx, sr, storiface.FTSealed|storiface.FTCache, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
+		fmt.Printf("=====================================================no caice path:%#v\n", src)
 		if err != nil {
 			return nil, xerrors.Errorf("acquire sector: %w", err)
 		}

@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"os"
+	"os/exec"
 	"reflect"
 	"runtime"
 	"strings"
@@ -68,6 +70,45 @@ func GetLocalIPv4s() string {
 			}
 		}
 	}
-
 	return ""
+}
+
+func MountNfs(nfsPath, nfsServer string) error {
+	// sudo mount -t nfs 192.168.1.1:/data/backups /data/backups -o nolock
+	//data := "/data/nfs"
+	//nfsServer = "127.0.0.1"
+	//nfsPath = "/data/mount_nfs"
+	//err := syscall.Mount(":"+nfsPath, data, "nfs4", 0, "nolock,addr="+nfsServer)
+	//if err != nil {
+	//	fmt.Println("a:", err)
+	//}
+	// sudo mount localhost:/home/qiushao/nfs-share /mnt
+	// sudo mount 192.168.0.128:/data/nfs /data/mount_nfs/
+	//cmd := exec.Command("sudo", "mount", "192.168.0.128:/data/nfs", "/data/mount_nfs1")
+	cmd := exec.Command("mount", nfsServer, nfsPath)
+	//cmd.Stdout = os.Stdout
+	//cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		log.Fatalf("failed to call cmd.Run(): %v", err)
+		return err
+	}
+	return nil
+}
+
+func PathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		// 创建文件夹
+		err := os.MkdirAll(path, 0777)
+		if err != nil {
+			return false, err
+		} else {
+			return true, nil
+		}
+	}
+	return false, err
 }
