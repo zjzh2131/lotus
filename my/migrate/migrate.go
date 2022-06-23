@@ -10,12 +10,6 @@ import (
 	//"github.com/filecoin-project/lotus/extern/sector-storage/utils/ftp"
 	//"github.com/filecoin-project/lotus/node/impl"
 	"golang.org/x/xerrors"
-<<<<<<< HEAD
-	//"net/http"
-	//"context"
-=======
-
->>>>>>> 44b605496a74d2ce273472ed618ae9681622568d
 	"os"
 	"path/filepath"
 	"reflect"
