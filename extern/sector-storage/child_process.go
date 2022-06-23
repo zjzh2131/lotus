@@ -7,6 +7,7 @@ import (
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
 	"go.mongodb.org/mongo-driver/bson"
+	"path/filepath"
 	"time"
 )
 
@@ -397,9 +398,9 @@ func (l *MyTmpLocalWorkerPathProvider) AcquireSector(ctx context.Context, sector
 	folder := fmt.Sprintf("s-t0%v-%v", sector.ID.Miner, sector.ID.Number)
 	return storiface.SectorPaths{
 		ID:          sector.ID,
-		Unsealed:    machinePath + "unsealed/" + folder,
-		Sealed:      machinePath + "sealed/" + folder,
-		Cache:       machinePath + "cache/" + folder,
+		Unsealed:    filepath.Join(machinePath, "unsealed", folder),
+		Sealed:      filepath.Join(machinePath, "sealed", folder),
+		Cache:       filepath.Join(machinePath, "cache", folder),
 		Update:      "",
 		UpdateCache: "",
 	}, func() {}, nil

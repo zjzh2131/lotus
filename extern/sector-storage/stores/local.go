@@ -537,9 +537,9 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 		if s.WorkerIp != "" && m.MinerMountPath != "" {
 			// 确保已经挂载
 			folder := fmt.Sprintf("s-t0%v-%v", sid.ID.Miner, sid.ID.Number)
-			out.Cache = m.MinerMountPath + s.WorkerIp + "/cache/" + folder
-			out.Sealed = m.MinerMountPath + s.WorkerIp + "/sealed/" + folder
-			out.Unsealed = m.MinerMountPath + s.WorkerIp + "/unsealed/" + folder
+			out.Cache = filepath.Join(m.MinerMountPath, s.WorkerIp, "cache", folder)
+			out.Sealed = filepath.Join(m.MinerMountPath, s.WorkerIp, "sealed", folder)
+			out.Unsealed = filepath.Join(m.MinerMountPath, s.WorkerIp, "unsealed", folder)
 		}
 	}
 	return out, storageIDs, nil

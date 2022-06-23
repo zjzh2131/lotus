@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -90,7 +89,7 @@ func MountNfs(nfsPath, nfsServer string) error {
 	//cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
-		log.Fatalf("failed to call mount: %v", err)
+		//log.Fatalf("failed to call mount: %v", err)
 		return err
 	}
 	return nil

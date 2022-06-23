@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/xerrors"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -98,12 +99,12 @@ func MountAllStorage() {
 	}
 	miner, err := myMongo.FindOneMachine(filter)
 	if err != nil || miner == nil || miner.MinerMountPath == "" {
-		return
+		panic("miner machine info err")
 	}
 	for _, v := range machines {
 		// 	cmd := exec.Command("sudo", "mount", "192.168.0.128:/data/nfs", "/data/mount_nfs1")
 		nfsServer := v.Ip + ":" + v.StoragePath
-		nfsPath := miner.MinerMountPath + v.Ip
+		nfsPath := filepath.Join(miner.MinerMountPath, v.Ip)
 		exists, err := myUtils.PathExists(nfsPath)
 		if err != nil {
 			e := fmt.Sprintf("mount folder creation error, path: %v\n", nfsPath)

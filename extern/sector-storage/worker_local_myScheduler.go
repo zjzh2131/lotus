@@ -8,9 +8,11 @@ import (
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/storage-sealing/lib/nullreader"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
+	migration "github.com/filecoin-project/lotus/my/migrate"
 	"github.com/filecoin-project/lotus/my/myModel"
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/xerrors"
 	"os/exec"
@@ -46,9 +48,11 @@ type SchedulerControl struct {
 }
 
 type taskReq struct {
-	ID       primitive.ObjectID
-	TaskType string
-	SectorId uint64
+	ID        primitive.ObjectID
+	TaskType  string
+	SectorId  uint64
+	RSProof   abi.RegisteredSealProof
+	SectorRef storage.SectorRef
 }
 
 func (sc *SchedulerControl) myScheduler() {
@@ -234,7 +238,7 @@ func (sc *SchedulerControl) onceScheduler() error {
 		case "seal/v0/commit/2":
 			sc.c2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
 		case "seal/v0/finalize":
-			sc.finalizeSector(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			sc.finalizeSector(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef.ProofType, task.SectorRef)
 		}
 	}
 	return nil
@@ -360,7 +364,7 @@ func (sc *SchedulerControl) c2(taskId primitive.ObjectID, taskType string, sid u
 	}
 }
 
-func (sc *SchedulerControl) finalizeSector(taskId primitive.ObjectID, taskType string, sid uint64) {
+func (sc *SchedulerControl) finalizeSector(taskId primitive.ObjectID, taskType string, sid uint64, rsProof abi.RegisteredSealProof, sectorRef storage.SectorRef) {
 	sc.lk.Lock()
 	defer sc.lk.Unlock()
 
@@ -370,9 +374,11 @@ func (sc *SchedulerControl) finalizeSector(taskId primitive.ObjectID, taskType s
 	}
 	if ok {
 		sc.FZ <- taskReq{
-			ID:       taskId,
-			TaskType: taskType,
-			SectorId: sid,
+			ID:        taskId,
+			TaskType:  taskType,
+			SectorId:  sid,
+			RSProof:   rsProof,
+			SectorRef: sectorRef,
 		}
 	}
 }
@@ -384,11 +390,14 @@ func (sc *SchedulerControl) apCp(apReq taskReq) {
 	id := fmt.Sprintf("%v", apReq.ID)
 	id = strings.Split(id, `"`)[1]
 	go func() {
+		defer func() {
+			<-sc.ApP1
+		}()
+
 		err := callChildProcess([]string{apReq.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(apReq.ID, "failed")
 		}
-		<-sc.ApP1
 	}()
 }
 
@@ -399,11 +408,14 @@ func (sc *SchedulerControl) p1Cp(p1Req taskReq) {
 	id := fmt.Sprintf("%v", p1Req.ID)
 	id = strings.Split(id, `"`)[1]
 	go func() {
+		defer func() {
+			<-sc.ApP1
+		}()
+
 		err := callChildProcess([]string{p1Req.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(p1Req.ID, "failed")
 		}
-		<-sc.ApP1
 	}()
 }
 
@@ -414,11 +426,14 @@ func (sc *SchedulerControl) p2Cp(p2Req taskReq) {
 	id := fmt.Sprintf("%v", p2Req.ID)
 	id = strings.Split(id, `"`)[1]
 	go func() {
+		defer func() {
+			<-sc.P2C2
+		}()
+
 		err := callChildProcess([]string{p2Req.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(p2Req.ID, "failed")
 		}
-		<-sc.P2C2
 	}()
 }
 
@@ -443,11 +458,14 @@ func (sc *SchedulerControl) c2Cp(c2Req taskReq) {
 	id := fmt.Sprintf("%v", c2Req.ID)
 	id = strings.Split(id, `"`)[1]
 	go func() {
+		defer func() {
+			<-sc.P2C2
+		}()
+
 		err := callChildProcess([]string{c2Req.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(c2Req.ID, "failed")
 		}
-		<-sc.P2C2
 	}()
 }
 
@@ -458,21 +476,62 @@ func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
 	id := fmt.Sprintf("%v", fzReq.ID)
 	id = strings.Split(id, `"`)[1]
 	go func() {
+		defer func() {
+			<-sc.SealingCh
+			delete(sc.SealingM, uint64(fzReq.SectorId))
+		}()
+
 		err := callChildProcess([]string{fzReq.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(fzReq.ID, "failed")
 		}
 		myMongo.UpdateSectorStatus(fzReq.SectorId, "living")
 
-		// TODO ftp migrate
-		//sector, _ := myMongo.FindSectorsBySid(fzReq.SectorId)
-		//sector.MigratePath
-		// 2. update sector storage path
-		myMongo.UpdateSectorStoragePath(fzReq.ID, "")
-		myMongo.UpdateSectorStatus(fzReq.SectorId, "migrated")
-		<-sc.SealingCh
-		delete(sc.SealingM, uint64(fzReq.SectorId))
+		//err = migrate(fzReq)
+		//if err != nil {
+		//	return
+		//}
 	}()
+}
+
+func migrate(fzReq taskReq) error {
+	// TODO ftp migrate
+	sid, err := myMongo.FindSectorsBySid(fzReq.SectorId)
+	if err != nil {
+		return err
+	}
+	folder := fmt.Sprintf("s-t0%v-%v", fzReq.SectorRef.ID.Miner, fzReq.SectorRef.ID.Number)
+	ip := myUtils.GetLocalIPv4s()
+	workerMachine, err := myMongo.FindOneMachine(bson.M{
+		"ip": ip,
+	})
+	if err != nil {
+		return err
+	}
+	if workerMachine == nil {
+		return xerrors.New("不存在该worker")
+	}
+
+	p := migration.MigrateParam{
+		SectorID:  folder,
+		FromIP:    ip,
+		FromPath:  workerMachine.WorkerLocalPath,
+		StoreIP:   sid.StorageIp,
+		StorePath: sid.StoragePath,
+		FtpEnv: migration.FtpEnvStruct{
+			FtpPort:     "21",
+			FtpUser:     "lotus",
+			FtpPassword: "980926",
+		},
+	}
+	err = migration.MigrateWithFtp(p, fzReq.RSProof)
+	if err != nil {
+		fmt.Println("===========================================ftp err:", err)
+	}
+	// 2. update sector storage path
+	myMongo.UpdateSectorStoragePath(fzReq.ID, "")
+	myMongo.UpdateSectorStatus(fzReq.SectorId, "migrated")
+	return nil
 }
 
 // 1.0
