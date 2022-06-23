@@ -574,6 +574,7 @@ func (l *LocalWorker) ReleaseUnsealed(ctx context.Context, sector storage.Sector
 }
 
 func (l *LocalWorker) Remove(ctx context.Context, sector abi.SectorID) error {
+	// TODO remove cp
 	var err error
 
 	if rerr := l.storage.Remove(ctx, sector, storiface.FTSealed, true, nil); rerr != nil {

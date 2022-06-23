@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
+	"github.com/filecoin-project/lotus/my/myUtils"
+	"go.mongodb.org/mongo-driver/bson"
 	"io/ioutil"
 	"math/bits"
 	"math/rand"
@@ -526,15 +528,18 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 	}
 
 	s, _ := myMongo.FindSectorsBySid(uint64(sid.ID.Number))
+	filter := bson.M{
+		"ip": myUtils.GetLocalIPv4s(),
+	}
+	m, _ := myMongo.FindOneMachine(filter)
 	//b.Root = s.StoragePath
-	if s != nil {
-		if s.WorkerIp != "" {
-			//b.Root = "/data/mount/" + s.WorkerIp
-			//b.Root = "/home/lotus/.lotusminer"
+	if s != nil && m != nil {
+		if s.WorkerIp != "" && m.MinerMountPath != "" {
+			// 确保已经挂载
 			folder := fmt.Sprintf("s-t0%v-%v", sid.ID.Miner, sid.ID.Number)
-			out.Cache = "/home/lotus/.lotusminer/cache/" + folder
-			out.Sealed = "/home/lotus/.lotusminer/sealed/" + folder
-			out.Unsealed = "/home/lotus/.lotusminer/unsealed/" + folder
+			out.Cache = m.MinerMountPath + s.WorkerIp + "/cache/" + folder
+			out.Sealed = m.MinerMountPath + s.WorkerIp + "/sealed/" + folder
+			out.Unsealed = m.MinerMountPath + s.WorkerIp + "/unsealed/" + folder
 		}
 	}
 	return out, storageIDs, nil

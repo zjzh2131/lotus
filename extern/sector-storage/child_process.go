@@ -384,8 +384,16 @@ func fs(taskId string) error {
 type MyTmpLocalWorkerPathProvider struct{}
 
 func (l *MyTmpLocalWorkerPathProvider) AcquireSector(ctx context.Context, sector storage.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, sealing storiface.PathType) (storiface.SectorPaths, func(), error) {
-	// TODO
-	machinePath := "/home/lotus/.lotusminer/"
+	filter := bson.M{
+		"ip":   myUtils.GetLocalIPv4s(),
+		"role": "worker",
+	}
+	machine, err := myMongo.FindMachine(filter)
+	if err != nil || len(machine) == 0 {
+		return storiface.SectorPaths{}, nil, err
+	}
+	machinePath := machine[0].WorkerLocalPath
+	// TODO t0 f0
 	folder := fmt.Sprintf("s-t0%v-%v", sector.ID.Miner, sector.ID.Number)
 	return storiface.SectorPaths{
 		ID:          sector.ID,

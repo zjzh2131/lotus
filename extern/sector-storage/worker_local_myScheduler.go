@@ -462,10 +462,14 @@ func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
 		if err != nil {
 			myMongo.UpdateStatus(fzReq.ID, "failed")
 		}
-		// TODO 1. ftp migrate
+		myMongo.UpdateSectorStatus(fzReq.SectorId, "living")
+
+		// TODO ftp migrate
+		//sector, _ := myMongo.FindSectorsBySid(fzReq.SectorId)
+		//sector.MigratePath
 		// 2. update sector storage path
 		myMongo.UpdateSectorStoragePath(fzReq.ID, "")
-		myMongo.UpdateSectorStatus(fzReq.SectorId, "living")
+		myMongo.UpdateSectorStatus(fzReq.SectorId, "migrated")
 		<-sc.SealingCh
 		delete(sc.SealingM, uint64(fzReq.SectorId))
 	}()

@@ -67,6 +67,7 @@ type Sector struct {
 	SectorType   string            `json:"sector_type" bson:"sector_type"` // cc
 
 	StoragePath string `json:"storage_path" bson:"storage_path"`
+	MigratePath string `json:"migrate_path" bson:"migrate_path"`
 
 	NodeId    string `json:"node_id" bson:"node_id"`
 	ClusterId string `json:"cluster_id" bson:"cluster_id"`
@@ -84,8 +85,11 @@ type Machine struct {
 	HardwareInfo *hardwareInfo `json:"hardware_info" bson:"hardware_info"`
 	ControlInfo  *controlInfo  `json:"control_info" bson:"control_info"`
 
-	Role        string `json:"role" bson:"role"` // lotus/miner/winPost/wdPost/worker/storage
-	StoragePath string `json:"storage_path" bson:"storage_path"`
+	Role string `json:"role" bson:"role"` // lotus/miner/winPost/wdPost/worker/storage
+
+	WorkerLocalPath string `json:"worker_local_storage_path" bson:"worker_local_storage_path"` // worker
+	MinerMountPath  string `json:"miner_mount_path" bson:"miner_mount_path"`                   // miner
+	StoragePath     string `json:"storage_path" bson:"storage_path"`                           // storage
 
 	NodeId    string `json:"node_id" bson:"node_id"`
 	ClusterId string `json:"cluster_id" bson:"cluster_id"`

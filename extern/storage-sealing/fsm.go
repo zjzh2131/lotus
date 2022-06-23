@@ -18,6 +18,14 @@ import (
 
 func (m *Sealing) Plan(events []statemachine.Event, user interface{}) (interface{}, uint64, error) {
 	next, processed, err := m.plan(events, user.(*SectorInfo))
+	//eventS, _ := json.Marshal(events)
+	//siinfo, _ := json.Marshal(user.(*SectorInfo))
+	//myUtils.WriteFileString(string(eventS))
+	//myUtils.WriteFileString("------------------------------------------------------------------------------")
+	//myUtils.WriteFileString(string(siinfo))
+	//myUtils.WriteFileString("------------------------------------------------------------------------------")
+	//myUtils.WriteFileString(myUtils.GetFunctionName(next, '/', '.'))
+	//myUtils.WriteFileString("===========================================================================")
 	if err != nil || next == nil {
 		l := Log{
 			Timestamp: uint64(time.Now().Unix()),

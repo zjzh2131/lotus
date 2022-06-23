@@ -655,3 +655,54 @@ func UpdateTask(filter, update interface{}) error {
 	}
 	return nil
 }
+
+func UpdateSector(filter, update interface{}) error {
+	_, err := MongoHandler.Collection(Sectors).UpdateMany(context.TODO(), filter, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func FindMachine(filter interface{}) ([]*myModel.Machine, error) {
+	var machines []*myModel.Machine
+	var err error
+
+	findResults, err := MongoHandler.Collection(Machines).Find(context.TODO(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err := findResults.Close(context.TODO())
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+	for findResults.Next(context.TODO()) {
+		var machine myModel.Machine
+		err := findResults.Decode(&machine)
+		if err != nil {
+			return nil, err
+		}
+		machines = append(machines, &machine)
+	}
+	return machines, nil
+}
+
+func FindOneMachine(filter interface{}) (*myModel.Machine, error) {
+	var machines myModel.Machine
+	var err error
+
+	singleResult := MongoHandler.Collection(Machines).FindOne(context.TODO(), filter)
+	if err = singleResult.Err(); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if err = singleResult.Decode(&machines); err != nil {
+		return nil, err
+	}
+	return &machines, nil
+}

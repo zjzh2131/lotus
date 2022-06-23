@@ -85,12 +85,12 @@ func MountNfs(nfsPath, nfsServer string) error {
 	// sudo mount localhost:/home/qiushao/nfs-share /mnt
 	// sudo mount 192.168.0.128:/data/nfs /data/mount_nfs/
 	//cmd := exec.Command("sudo", "mount", "192.168.0.128:/data/nfs", "/data/mount_nfs1")
-	cmd := exec.Command("mount", nfsServer, nfsPath)
+	cmd := exec.Command("sudo", "mount", nfsServer, nfsPath)
 	//cmd.Stdout = os.Stdout
 	//cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
-		log.Fatalf("failed to call cmd.Run(): %v", err)
+		log.Fatalf("failed to call mount: %v", err)
 		return err
 	}
 	return nil

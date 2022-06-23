@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/lotus/my/myModel"
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
+	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/xerrors"
 	"sync"
 	"time"
@@ -91,10 +92,18 @@ func MountAllStorage() {
 	if err != nil {
 		return
 	}
+	filter := bson.M{
+		"ip":   myUtils.GetLocalIPv4s(),
+		"role": "miner",
+	}
+	miner, err := myMongo.FindOneMachine(filter)
+	if err != nil || miner == nil || miner.MinerMountPath == "" {
+		return
+	}
 	for _, v := range machines {
 		// 	cmd := exec.Command("sudo", "mount", "192.168.0.128:/data/nfs", "/data/mount_nfs1")
 		nfsServer := v.Ip + ":" + v.StoragePath
-		nfsPath := "/data/mount/" + v.Ip
+		nfsPath := miner.MinerMountPath + v.Ip
 		exists, err := myUtils.PathExists(nfsPath)
 		if err != nil {
 			e := fmt.Sprintf("mount folder creation error, path: %v\n", nfsPath)

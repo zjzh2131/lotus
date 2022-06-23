@@ -13,6 +13,7 @@ import (
 	cid "github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/mitchellh/go-homedir"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.uber.org/multierr"
 	"golang.org/x/xerrors"
 	"io"
@@ -764,10 +765,26 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 
 	var err error
 	var out myModel.MyFinalizeSectorOut
-	err = myMongo.InitTask(sector, string(sealtasks.TTFinalize), "pending", []interface{}{keepUnsealed}...)
-	if err != nil {
-		return err
-	}
+	myMongo.Transaction(func() error {
+		err = myMongo.InitTask(sector, string(sealtasks.TTFinalize), "pending", []interface{}{keepUnsealed}...)
+		if err != nil {
+			return err
+		}
+		// TODO option migrate path
+		migratePath := ""
+		filter := bson.M{
+			"sector_ref.id.number": uint64(sector.ID.Number),
+		}
+		update := bson.M{}
+		update["$set"] = bson.D{
+			bson.E{Key: "migrate_path", Value: migratePath},
+		}
+		err := myMongo.UpdateSector(filter, UnsealPiece)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
