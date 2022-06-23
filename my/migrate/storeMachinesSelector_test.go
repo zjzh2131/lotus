@@ -3,6 +3,8 @@ package migration
 import (
 	"context"
 	"fmt"
+	"github.com/filecoin-project/go-state-types/abi"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -29,10 +31,10 @@ func MockMigrateBegin() (*mongo.InsertOneResult, error) {
 	task := MigrateTasks{
 		SectorID:     "s-t01000-0",
 		Version:      "",
-		FromIP:       "192.168.139.128",
-		FromPath:     "/home/hp/.genesis-sectors",
-		StoreIP:      "192.168.0.11",
-		StorePath:    "/home/zjzh/migrate",
+		FromIP:       "192.168.0.128",
+		FromPath:     "/home/lotus/.genesis-sectors",
+		StoreIP:      "192.168.0.128",
+		StorePath:    "/home/nfs",
 		FailureCount: 0,
 		FtpStatus:    0,
 		StartTime:    time.Now().Unix(),
@@ -102,4 +104,46 @@ func TestSelectStoreMachine(t *testing.T) {
 		}(i)
 	}
 	w.Wait()
+}
+
+func TestFtp(t *testing.T) {
+	os.Setenv("GOLOG_OUTPUT", "file")
+	os.Setenv("GOLOG_FILE", "/home/lotus/worker.log")
+	go MonitorStoreMachine()
+	ctx := context.Background()
+	if err := StoreMachineManager.NewStoreMachines(ctx); err != nil {
+		fmt.Println("NewStoreMachines err:", err)
+		return
+	}
+	//insertResult, err := MockMigrateBegin()
+	sm, err := StoreMachineManager.SelectStoreMachine(ctx, NetWorkIOBalance, "")
+	if sm == nil {
+		if err != nil {
+			fmt.Println("SelectStoreMachine err ", err)
+			return
+		}
+	}
+	p := MigrateParam{
+		SectorID:  "s-t01000-0",
+		FromIP:    "192.168.0.128",
+		FromPath:  "/home/lotus/.genesis-sectors",
+		StoreIP:   "192.168.0.11",
+		StorePath: "/cephfs/data/nfs",
+		FtpEnv: FtpEnvStruct{
+			FtpPort:     "21",
+			FtpUser:     "zjzh",
+			FtpPassword: "zjzh516",
+		},
+	}
+	fmt.Println("start ftp")
+	err = MigrateWithFtp(p, abi.RegisteredSealProof(5))
+	if err != nil {
+		fmt.Println("ftp err:", err)
+		return
+	}
+
+	//err = StoreMachineManager.DoneStoreMachine(context.TODO(), &MigrateTasks{StorePath: sm.StorePath, StoreIP: sm.StoreIP})
+	//if err != nil {
+	//	return
+	//}
 }
