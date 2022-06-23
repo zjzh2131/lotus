@@ -33,9 +33,9 @@ var (
 
 type StoreMachines struct {
 	ID                           primitive.ObjectID `json:"id" bson:"_id,omitempty"` // ObjectId
-	StoreIP                      string             `json:"storeip" bson:"storeip"`
-	StorePath                    string             `json:"storepath" bson:"storepath"`
-	GroupID                      string             `json:"GroupID" bson:"GroupID"`
+	StoreIP                      string             `json:"ip" bson:"ip"`
+	StorePath                    string             `json:"storage_path" bson:"storage_path"`
+	GroupID                      string             `json:"cluster_id" bson:"cluster_id"`
 	MaxParallelMigrateSectorSize int32              `json:"MaxParallelMigrateSectorSize" bson:"MaxParallelMigrateSectorSize"`
 	ParallelMigrateSectorSize    int32              `json:"parallelmigratesectorsize" bson:"parallelmigratesectorsize"`
 	MaxStoreSectorSize           int32              `json:"MaxStoreSectorSize" bson:"MaxStoreSectorSize"`
@@ -140,7 +140,7 @@ func (smh *StoreMachineHandle) NewStoreMachines(ctx context.Context) error {
 	smh.MutexLock.Lock()
 	defer smh.MutexLock.Unlock()
 	log.Info("NewStoreMachines ")
-	f := bson.D{{"Status", 1}, {"storeip", bson.D{{"$ne", "127.0.0.1"}}}}
+	f := bson.D{{"Status", 1}, {"role", "storage"}, {"ip", bson.D{{"$ne", "127.0.0.1"}}}}
 	rs, err := MongoHandler.Collection("machines").Find(ctx, f)
 	if err != nil {
 		log.Error("find error ")
@@ -310,8 +310,8 @@ func (smh *StoreMachineHandle) CancelStoreMachine(ctx context.Context, task *Mig
 }
 
 func init() {
-	//MongoHandler = InitMongo("mongodb://124.220.208.74:27017", "lotus", 10*time.Second, 100)
-	MongoHandler = InitMongo("mongodb://192.168.0.11:27017", "test", 10*time.Second, 100)
+	MongoHandler = InitMongo("mongodb://124.220.208.74:27017", "lotus", 10*time.Second, 100)
+	//MongoHandler = InitMongo("mongodb://192.168.0.11:27017", "test", 10*time.Second, 100)
 }
 
 func InitMongo(uri, name string, timeout time.Duration, num uint64) *mongo.Database {
@@ -333,7 +333,7 @@ func MonitorStoreMachine() {
 	//	Init()
 	//	log.Infof("init DB\n")
 	//}
-	f := bson.D{{"Status", 1}, {"storeip", bson.D{{"$ne", "127.0.0.1"}}}}
+	f := bson.D{{"Status", 1}, {"role", "storage"}, {"ip", bson.D{{"$ne", "127.0.0.1"}}}}
 	oldCount := 0
 	log.Infof("oldCount:[%d]\n", oldCount)
 	for {

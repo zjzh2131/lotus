@@ -23,6 +23,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
 	"github.com/filecoin-project/lotus/genesis"
+	//"time"
+	//"github.com/filecoin-project/lotus/my/migrate"
 )
 
 var log = logging.Logger("lotus-seed")
@@ -148,6 +150,22 @@ var preSealCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
+
+		//go migration.MonitorStoreMachine()
+		//time.Sleep(10 * time.Second)
+		//param := migration.MigrateParam{
+		//	SectorID:  "s-t01000-0",
+		//	FromIP:    "192.168.139.128",
+		//	FromPath:  "/home/hp/.genesis-sectors",
+		//	StoreIP:   "192.168.0.11",
+		//	StorePath: "/cephfs/data/nfs",
+		//	FtpEnv: migration.FtpEnvStruct{
+		//		FtpPort:     "21",
+		//		FtpUser:     "zjzh",
+		//		FtpPassword: "zjzh516",
+		//	},
+		//}
+		//err = migration.MigrateWithFtp(param, abi.RegisteredSealProof_StackedDrg2KiBV1)
 
 		return seed.WriteGenesisMiner(maddr, sbroot, gm, key)
 	},

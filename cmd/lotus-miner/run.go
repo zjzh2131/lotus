@@ -25,6 +25,7 @@ import (
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/repo"
+	"github.com/filecoin-project/lotus/my/migrate"
 )
 
 var runCmd = &cli.Command{
@@ -190,6 +191,8 @@ var runCmd = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to start json-rpc endpoint: %s", err)
 		}
+
+		go migration.MonitorStoreMachine() 
 
 		// Monitor for shutdown.
 		finishCh := node.MonitorShutdown(shutdownChan,
