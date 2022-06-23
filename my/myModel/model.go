@@ -66,6 +66,7 @@ type Sector struct {
 	SectorStatus string            `json:"sector_status" bson:"sector_status"`
 	SectorType   string            `json:"sector_type" bson:"sector_type"` // cc
 
+	StorageIp   string `json:"storage_ip" bson:"storage_ip"`
 	StoragePath string `json:"storage_path" bson:"storage_path"`
 	MigratePath string `json:"migrate_path" bson:"migrate_path"`
 
@@ -94,6 +95,12 @@ type Machine struct {
 	NodeId    string `json:"node_id" bson:"node_id"`
 	ClusterId string `json:"cluster_id" bson:"cluster_id"`
 
+	MaxParallelMigrateSectorSize uint64 `json:"max_parallel_migrate_sector_size" bson:"MaxParallelMigrateSectorSize"`
+	Parallelmigratesectorsize    uint64 `json:"parallelmigratesectorsize" bson:"parallelmigratesectorsize"`
+	MaxStoreSectorSize           uint64 `json:"max_store_sector_size" bson:"MaxStoreSectorSize"`
+	Status                       int64  `json:"status" bson:"Status"`
+	FtpEnv                       FtpEnv `json:"ftp_env" bson:"FtpEnv"`
+
 	CreatedAt int64  `json:"created_at" bson:"created_at"`
 	CreatedBy string `json:"created_by" bson:"created_by"`
 	UpdatedAt int64  `json:"updated_at" bson:"updated_at"`
@@ -104,6 +111,12 @@ type hardwareInfo struct {
 }
 
 type controlInfo struct {
+}
+
+type FtpEnv struct {
+	FtpPort     string `json:"FtpPort" bson:"FtpPort"`
+	FtpUser     string `json:"FtpUser" bson:"FtpUser"`
+	FtpPassword string `json:"FtpPassword" bson:"FtpPassword"`
 }
 
 type APParam0 []abi.UnpaddedPieceSize
