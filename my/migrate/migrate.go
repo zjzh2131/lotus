@@ -599,11 +599,11 @@ func MigrateWithFtp(param MigrateParam, spt abi.RegisteredSealProof) error {
 		Error:        "",
 		TaskType:     MigrateType_Sealed,
 	}
-	insertResult, err := AddMigrateTask(context.TODO(), &task)
-	if err != nil {
-		log.Error("AddMigrateTask error")
-		return err
-	}
+	//insertResult, err := AddMigrateTask(context.TODO(), &task)
+	//if err != nil {
+	//	log.Error("AddMigrateTask error")
+	//	return err
+	//}
 	//wg := sync.WaitGroup{}
 	//wg.Add(1)
 	err = doMigrateTaskWithFtp(f, nil, nil, task, spt)
@@ -613,10 +613,10 @@ func MigrateWithFtp(param MigrateParam, spt abi.RegisteredSealProof) error {
 	} else {
 		task.Error = "success"
 	}
-	objID := insertResult.InsertedID.(primitive.ObjectID)
-	err = UpdateMigrateTaskByID(context.TODO(), objID, &task)
+	//objID := insertResult.InsertedID.(primitive.ObjectID)
+	//err = UpdateMigrateTaskByID(context.TODO(), objID, &task)
 
-	return nil
+	return err
 }
 
 func MigrateFile(task MigrateTasks, p abi.RegisteredSealProof) error {
