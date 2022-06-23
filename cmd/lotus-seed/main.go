@@ -158,7 +158,7 @@ var preSealCmd = &cli.Command{
 		//	FromIP:    "192.168.139.128",
 		//	FromPath:  "/home/hp/.genesis-sectors",
 		//	StoreIP:   "192.168.0.11",
-		//	StorePath: "/cephfs/data/nfs",
+		//	StorePath: "/root/data/nfs",
 		//	FtpEnv: migration.FtpEnvStruct{
 		//		FtpPort:     "21",
 		//		FtpUser:     "zjzh",
@@ -166,6 +166,9 @@ var preSealCmd = &cli.Command{
 		//	},
 		//}
 		//err = migration.MigrateWithFtp(param, abi.RegisteredSealProof_StackedDrg2KiBV1)
+		//if err != nil {
+		//	fmt.Printf("MigrateWithFtp error: %s", err.Error())
+		//}
 
 		return seed.WriteGenesisMiner(maddr, sbroot, gm, key)
 	},

@@ -28,7 +28,7 @@ var (
 	DiskIOBalance        = "DiskIOBalance"
 	NetWorkIOBalance     = "NetWorkIOBalance"
 	ComprehensiveBalance = "ComprehensiveBalance"
-	StoreMachineManager  = StoreMachineHandle{}
+	storeMachineManager  = StoreMachineHandle{}
 )
 
 type StoreMachines struct {
@@ -45,10 +45,6 @@ type StoreMachines struct {
 	CreatedAt                    time.Time `json:"CreatedAt" bson:"CreatedAt"`
 	UpdatedAt                    time.Time `json:"UpdatedAt" bson:"UpdatedAt"`
 }
-
-var (
-	machines map[string]StoreMachines
-)
 
 type StoreMachineHandle struct {
 	Handler   map[string]*CycleQueue //key: groupid
@@ -346,8 +342,8 @@ func MonitorStoreMachine() {
 		log.Infof("store machine count :[%d] -> [%d]\n", oldCount, int(newCount))
 		if oldCount != int(newCount) {
 			log.Infof("store machine count change:[%d] -> [%d]\n", oldCount, int(newCount))
-			if err := StoreMachineManager.NewStoreMachines(context.Background()); err != nil {
-				log.Error("StoreMachineManager.NewStoreMachines err :", err)
+			if err := storeMachineManager.NewStoreMachines(context.Background()); err != nil {
+				log.Error("storeMachineManager.NewStoreMachines err :", err)
 				time.Sleep(10 * time.Minute)
 				continue
 			}
@@ -356,3 +352,27 @@ func MonitorStoreMachine() {
 		time.Sleep(10 * time.Minute)
 	}
 }
+
+func SelectStoreMachine(ctx context.Context, kind, workerip string) (m *StoreMachines, err error) {
+	sm, err := storeMachineManager.SelectStoreMachine(ctx, kind, workerip)
+	return sm, err
+}
+
+func DoneStoreMachine(ctx context.Context, task *MigrateTasks) error {
+	err := storeMachineManager.DoneStoreMachine(ctx, task)
+	return err
+}
+
+func CancelStoreMachine(ctx context.Context, task *MigrateTasks) error {
+	err := storeMachineManager.CancelStoreMachine(ctx, task)
+	return err
+}
+
+func NewStoreMachines(ctx context.Context) error {
+	err := storeMachineManager.NewStoreMachines(ctx)
+	return err
+}
+
+func StoreMachineManager() *StoreMachineHandle {
+	return &storeMachineManager
+} 

@@ -16,11 +16,11 @@ import (
 func TestNewStoreMachines(t *testing.T) {
 	//_ = config.Init()
 	ctx := context.Background()
-	if err := StoreMachineManager.NewStoreMachines(ctx); err != nil {
+	if err := NewStoreMachines(ctx); err != nil {
 		fmt.Println("NewStoreMachines err", err)
 		return
 	}
-	for k, v := range StoreMachineManager.Handler {
+	for k, v := range StoreMachineManager().Handler {
 		fmt.Printf("groupid:[%s]\t[queue]:[%s] \n", k, v.DataArray())
 	}
 }
@@ -61,7 +61,7 @@ func TestSelectStoreMachine(t *testing.T) {
 	//因 CountMigrateTask 导致无法单独测出 并发数量的限制正常，需整体测，其它情形可以测。
 	//_ = config.Init()
 	ctx := context.Background()
-	if err := StoreMachineManager.NewStoreMachines(ctx); err != nil {
+	if err := NewStoreMachines(ctx); err != nil {
 		fmt.Println("NewStoreMachines err", err)
 		return
 	}
@@ -78,7 +78,7 @@ func TestSelectStoreMachine(t *testing.T) {
 			objID := insertResult.InsertedID.(primitive.ObjectID)
 			defer MockMigrateFinish(objID)
 
-			sm, err := StoreMachineManager.SelectStoreMachine(ctx, NetWorkIOBalance, workerip)
+			sm, err := SelectStoreMachine(ctx, NetWorkIOBalance, workerip)
 			if sm == nil {
 				if err != nil {
 					fmt.Println("SelectStoreMachine err ", err)
@@ -90,11 +90,11 @@ func TestSelectStoreMachine(t *testing.T) {
 				i, rand, sm.StoreIP, sm.StorePath, sm.ParallelMigrateSectorSize, sm.MaxParallelMigrateSectorSize, sm.StoreSectorSize, sm.MaxStoreSectorSize)
 
 			if rand == 3 {
-				if err := StoreMachineManager.CancelStoreMachine(ctx, &MigrateTasks{StorePath: sm.StorePath, StoreIP: sm.StoreIP}); err != nil {
+				if err := CancelStoreMachine(ctx, &MigrateTasks{StorePath: sm.StorePath, StoreIP: sm.StoreIP}); err != nil {
 					fmt.Println("CancelStoreMachine err ", err)
 				}
 			} else {
-				if err := StoreMachineManager.DoneStoreMachine(ctx, &MigrateTasks{StorePath: sm.StorePath, StoreIP: sm.StoreIP}); err != nil {
+				if err := DoneStoreMachine(ctx, &MigrateTasks{StorePath: sm.StorePath, StoreIP: sm.StoreIP}); err != nil {
 					fmt.Println("DoneStoreMachine err ", err)
 				}
 			}
