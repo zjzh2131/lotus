@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -28,7 +29,11 @@ const (
 )
 
 func init() {
-	MongoHandler = InitMongo("mongodb://124.220.208.74:27017", "lotus", 10*time.Second, 100)
+	//MongoHandler = InitMongo("mongodb://124.220.208.74:27017", "lotus", 10*time.Second, 100)
+	//MongoHandler = InitMongo("mongodb://192.168.0.22:27017", "lotus", 10*time.Second, 100)
+	url := os.Getenv("MONGO_URL")
+	fmt.Printf(url)
+	MongoHandler = InitMongo(url, "lotus", 10*time.Second, 100)
 }
 
 func InitMongo(uri, name string, timeout time.Duration, num uint64) *mongo.Database {
