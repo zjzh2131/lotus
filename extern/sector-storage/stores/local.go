@@ -435,98 +435,97 @@ func (st *Local) Reserve(ctx context.Context, sid storage.SectorRef, ft storifac
 }
 
 func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, pathType storiface.PathType, op storiface.AcquireMode) (storiface.SectorPaths, storiface.SectorPaths, error) {
-	if existing|allocate != existing^allocate {
-		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.New("can't both find and allocate a sector")
-	}
-
-	ssize, err := sid.ProofType.SectorSize()
-	if err != nil {
-		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
-	}
-
-	st.localLk.RLock()
-	defer st.localLk.RUnlock()
-
+	//if existing|allocate != existing^allocate {
+	//	return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.New("can't both find and allocate a sector")
+	//}
+	//
+	//ssize, err := sid.ProofType.SectorSize()
+	//if err != nil {
+	//	return storiface.SectorPaths{}, storiface.SectorPaths{}, err
+	//}
+	//
+	//st.localLk.RLock()
+	//defer st.localLk.RUnlock()
+	//
 	var out storiface.SectorPaths
-	var storageIDs storiface.SectorPaths
-
-	for _, fileType := range storiface.PathTypes {
-		if fileType&existing == 0 {
-			continue
-		}
-
-		si, err := st.index.StorageFindSector(ctx, sid.ID, fileType, ssize, false)
-		if err != nil {
-			log.Warnf("finding existing sector %d(t:%d) failed: %+v", sid, fileType, err)
-			continue
-		}
-
-		for _, info := range si {
-			p, ok := st.paths[info.ID]
-			if !ok {
-				continue
-			}
-
-			if p.local == "" { // TODO: can that even be the case?
-				continue
-			}
-
-			spath := p.sectorPath(sid.ID, fileType)
-			storiface.SetPathByType(&out, fileType, spath)
-			storiface.SetPathByType(&storageIDs, fileType, string(info.ID))
-
-			existing ^= fileType
-			break
-		}
-	}
-
-	for _, fileType := range storiface.PathTypes {
-		if fileType&allocate == 0 {
-			continue
-		}
-
-		sis, err := st.index.StorageBestAlloc(ctx, fileType, ssize, pathType)
-		if err != nil {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("finding best storage for allocating : %w", err)
-		}
-
-		var best string
-		var bestID storiface.ID
-
-		for _, si := range sis {
-			p, ok := st.paths[si.ID]
-			if !ok {
-				continue
-			}
-
-			if p.local == "" { // TODO: can that even be the case?
-				continue
-			}
-
-			if (pathType == storiface.PathSealing) && !si.CanSeal {
-				continue
-			}
-
-			if (pathType == storiface.PathStorage) && !si.CanStore {
-				continue
-			}
-
-			// TODO: Check free space
-
-			best = p.sectorPath(sid.ID, fileType)
-			bestID = si.ID
-			break
-		}
-
-		if best == "" {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("couldn't find a suitable path for a sector")
-		}
-
-		storiface.SetPathByType(&out, fileType, best)
-		storiface.SetPathByType(&storageIDs, fileType, string(bestID))
-		allocate ^= fileType
-	}
-
+	//var storageIDs storiface.SectorPaths
+	//
+	//for _, fileType := range storiface.PathTypes {
+	//	if fileType&existing == 0 {
+	//		continue
+	//	}
+	//
+	//	si, err := st.index.StorageFindSector(ctx, sid.ID, fileType, ssize, false)
+	//	if err != nil {
+	//		log.Warnf("finding existing sector %d(t:%d) failed: %+v", sid, fileType, err)
+	//		continue
+	//	}
+	//
+	//	for _, info := range si {
+	//		p, ok := st.paths[info.ID]
+	//		if !ok {
+	//			continue
+	//		}
+	//
+	//		if p.local == "" { // TODO: can that even be the case?
+	//			continue
+	//		}
+	//
+	//		spath := p.sectorPath(sid.ID, fileType)
+	//		storiface.SetPathByType(&out, fileType, spath)
+	//		storiface.SetPathByType(&storageIDs, fileType, string(info.ID))
+	//
+	//		existing ^= fileType
+	//		break
+	//	}
+	//}
+	//
+	//for _, fileType := range storiface.PathTypes {
+	//	if fileType&allocate == 0 {
+	//		continue
+	//	}
+	//
+	//	sis, err := st.index.StorageBestAlloc(ctx, fileType, ssize, pathType)
+	//	if err != nil {
+	//		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("finding best storage for allocating : %w", err)
+	//	}
+	//
+	//	var best string
+	//	var bestID storiface.ID
+	//
+	//	for _, si := range sis {
+	//		p, ok := st.paths[si.ID]
+	//		if !ok {
+	//			continue
+	//		}
+	//
+	//		if p.local == "" { // TODO: can that even be the case?
+	//			continue
+	//		}
+	//
+	//		if (pathType == storiface.PathSealing) && !si.CanSeal {
+	//			continue
+	//		}
+	//
+	//		if (pathType == storiface.PathStorage) && !si.CanStore {
+	//			continue
+	//		}
+	//
+	//		// TODO: Check free space
+	//
+	//		best = p.sectorPath(sid.ID, fileType)
+	//		bestID = si.ID
+	//		break
+	//	}
+	//
+	//	if best == "" {
+	//		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("couldn't find a suitable path for a sector")
+	//	}
+	//
+	//	storiface.SetPathByType(&out, fileType, best)
+	//	storiface.SetPathByType(&storageIDs, fileType, string(bestID))
+	//	allocate ^= fileType
+	//}
 	s, _ := myMongo.FindSectorsBySid(uint64(sid.ID.Number))
 	filter := bson.M{
 		"ip": myUtils.GetLocalIPv4s(),
@@ -537,12 +536,12 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 		if s.WorkerIp != "" && m.MinerMountPath != "" {
 			// 确保已经挂载
 			folder := fmt.Sprintf("s-t0%v-%v", sid.ID.Miner, sid.ID.Number)
-			out.Cache = filepath.Join(m.MinerMountPath, s.WorkerIp, "cache", folder)
-			out.Sealed = filepath.Join(m.MinerMountPath, s.WorkerIp, "sealed", folder)
-			out.Unsealed = filepath.Join(m.MinerMountPath, s.WorkerIp, "unsealed", folder)
+			out.Cache = filepath.Join(m.MinerMountPath, s.StorageIp, "cache", folder)
+			out.Sealed = filepath.Join(m.MinerMountPath, s.StorageIp, "sealed", folder)
+			out.Unsealed = filepath.Join(m.MinerMountPath, s.StorageIp, "unsealed", folder)
 		}
 	}
-	return out, storageIDs, nil
+	return out, out, nil
 }
 
 func (st *Local) Local(ctx context.Context) ([]storiface.StoragePath, error) {

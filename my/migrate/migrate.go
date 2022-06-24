@@ -10,7 +10,6 @@ import (
 	//"github.com/filecoin-project/lotus/extern/sector-storage/utils/ftp"
 	//"github.com/filecoin-project/lotus/node/impl"
 	"golang.org/x/xerrors"
-
 	"os"
 	"path/filepath"
 	"reflect"
@@ -607,16 +606,15 @@ func MigrateWithFtp(param MigrateParam, spt abi.RegisteredSealProof) error {
 	//wg.Add(1)
 	err := doMigrateTaskWithFtp(f, nil, nil, task, spt)
 	//wg.Wait()
-	if err != nil {
-		task.Error = err.Error()
-		return err
-	} else {
-		task.Error = "success"
-	}
+	//if err != nil {
+	//	task.Error = err.Error()
+	//} else {
+	//	task.Error = "success"
+	//}
 	//objID := insertResult.InsertedID.(primitive.ObjectID)
 	//err = UpdateMigrateTaskByID(context.TODO(), objID, &task)
 
-	return nil
+	return err
 }
 
 func MigrateFile(task MigrateTasks, p abi.RegisteredSealProof) error {

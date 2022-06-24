@@ -18,11 +18,11 @@ import (
 func TestNewStoreMachines(t *testing.T) {
 	//_ = config.Init()
 	ctx := context.Background()
-	if err := StoreMachineManager.NewStoreMachines(ctx); err != nil {
+	if err := NewStoreMachines(ctx); err != nil {
 		fmt.Println("NewStoreMachines err", err)
 		return
 	}
-	for k, v := range StoreMachineManager.Handler {
+	for k, v := range StoreMachineManager().Handler {
 		fmt.Printf("groupid:[%s]\t[queue]:[%s] \n", k, v.DataArray())
 	}
 }
@@ -63,7 +63,7 @@ func TestSelectStoreMachine(t *testing.T) {
 	//因 CountMigrateTask 导致无法单独测出 并发数量的限制正常，需整体测，其它情形可以测。
 	//_ = config.Init()
 	ctx := context.Background()
-	if err := StoreMachineManager.NewStoreMachines(ctx); err != nil {
+	if err := NewStoreMachines(ctx); err != nil {
 		fmt.Println("NewStoreMachines err", err)
 		return
 	}
@@ -80,7 +80,7 @@ func TestSelectStoreMachine(t *testing.T) {
 			objID := insertResult.InsertedID.(primitive.ObjectID)
 			defer MockMigrateFinish(objID)
 
-			sm, err := StoreMachineManager.SelectStoreMachine(ctx, NetWorkIOBalance, workerip)
+			sm, err := SelectStoreMachine(ctx, NetWorkIOBalance, workerip)
 			if sm == nil {
 				if err != nil {
 					fmt.Println("SelectStoreMachine err ", err)
@@ -92,11 +92,11 @@ func TestSelectStoreMachine(t *testing.T) {
 				i, rand, sm.StoreIP, sm.StorePath, sm.ParallelMigrateSectorSize, sm.MaxParallelMigrateSectorSize, sm.StoreSectorSize, sm.MaxStoreSectorSize)
 
 			if rand == 3 {
-				if err := StoreMachineManager.CancelStoreMachine(ctx, &MigrateTasks{StorePath: sm.StorePath, StoreIP: sm.StoreIP}); err != nil {
+				if err := CancelStoreMachine(ctx, &MigrateTasks{StorePath: sm.StorePath, StoreIP: sm.StoreIP}); err != nil {
 					fmt.Println("CancelStoreMachine err ", err)
 				}
 			} else {
-				if err := StoreMachineManager.DoneStoreMachine(ctx, &MigrateTasks{StorePath: sm.StorePath, StoreIP: sm.StoreIP}); err != nil {
+				if err := DoneStoreMachine(ctx, &MigrateTasks{StorePath: sm.StorePath, StoreIP: sm.StoreIP}); err != nil {
 					fmt.Println("DoneStoreMachine err ", err)
 				}
 			}
@@ -110,21 +110,25 @@ func TestFtp(t *testing.T) {
 	os.Setenv("GOLOG_OUTPUT", "file")
 	os.Setenv("GOLOG_FILE", "/home/lotus/worker.log")
 	go MonitorStoreMachine()
-	ctx := context.Background()
-	if err := StoreMachineManager.NewStoreMachines(ctx); err != nil {
-		fmt.Println("NewStoreMachines err:", err)
+	//if err := StoreMachineManager.NewStoreMachines(ctx); err != nil {
+	//	fmt.Println("NewStoreMachines err:", err)
+	//	return
+	//}
+	err := NewStoreMachines(context.TODO())
+	if err != nil {
+		fmt.Println("gg err:", err)
 		return
 	}
-	//insertResult, err := MockMigrateBegin()
-	sm, err := StoreMachineManager.SelectStoreMachine(ctx, NetWorkIOBalance, "")
-	if sm == nil {
-		if err != nil {
-			fmt.Println("SelectStoreMachine err ", err)
-			return
-		}
+
+	machine, err := SelectStoreMachine(context.TODO(), NetWorkIOBalance, "")
+	if err != nil {
+		fmt.Println("select err:", err)
+		return
 	}
+	fmt.Println(machine)
+
 	p := MigrateParam{
-		SectorID:  "s-t01000-0",
+		SectorID:  "s-t01000-1",
 		FromIP:    "192.168.0.128",
 		FromPath:  "/home/lotus/.genesis-sectors",
 		StoreIP:   "192.168.0.11",

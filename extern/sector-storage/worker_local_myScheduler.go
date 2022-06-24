@@ -484,13 +484,15 @@ func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
 		err := callChildProcess([]string{fzReq.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(fzReq.ID, "failed")
+			return
 		}
 		myMongo.UpdateSectorStatus(fzReq.SectorId, "living")
 
-		//err = migrate(fzReq)
-		//if err != nil {
-		//	return
-		//}
+		err = migrate(fzReq)
+		if err != nil {
+			myMongo.UpdateStatus(fzReq.ID, "failed")
+			return
+		}
 	}()
 }
 
@@ -503,7 +505,8 @@ func migrate(fzReq taskReq) error {
 	folder := fmt.Sprintf("s-t0%v-%v", fzReq.SectorRef.ID.Miner, fzReq.SectorRef.ID.Number)
 	ip := myUtils.GetLocalIPv4s()
 	workerMachine, err := myMongo.FindOneMachine(bson.M{
-		"ip": ip,
+		"ip":   ip,
+		"role": "worker",
 	})
 	if err != nil {
 		return err
@@ -520,13 +523,14 @@ func migrate(fzReq taskReq) error {
 		StorePath: sid.StoragePath,
 		FtpEnv: migration.FtpEnvStruct{
 			FtpPort:     "21",
-			FtpUser:     "lotus",
-			FtpPassword: "980926",
+			FtpUser:     "zjzh",
+			FtpPassword: "zjzh516",
 		},
 	}
 	err = migration.MigrateWithFtp(p, fzReq.RSProof)
 	if err != nil {
 		fmt.Println("===========================================ftp err:", err)
+		return err
 	}
 	// 2. update sector storage path
 	myMongo.UpdateSectorStoragePath(fzReq.ID, "")

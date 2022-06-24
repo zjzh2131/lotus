@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/filecoin-project/go-statestore"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
+	migration "github.com/filecoin-project/lotus/my/migrate"
 	"github.com/filecoin-project/lotus/my/myCommon"
 	"github.com/filecoin-project/lotus/my/myModel"
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 	cid "github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/mitchellh/go-homedir"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.uber.org/multierr"
 	"golang.org/x/xerrors"
 	"io"
@@ -770,23 +772,27 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 			return err
 		}
 		//// TODO option migrate path
-		//storageMachine, err := migration.StoreMachineManager.SelectStoreMachine(context.TODO(), migration.NetWorkIOBalance, "")
-		//if err != nil {
-		//	return err
-		//}
+		storageMachine, err := migration.SelectStoreMachine(context.TODO(), migration.NetWorkIOBalance, "")
+		if err != nil {
+			return err
+		}
+		if storageMachine.StoreIP == "" || storageMachine.StorePath == "" {
+			fmt.Println("StoreIP,StorePath is empty")
+			return err
+		}
 		//
-		//filter := bson.M{
-		//	"sector_ref.id.number": uint64(sector.ID.Number),
-		//}
-		//update := bson.M{}
-		//update["$set"] = bson.D{
-		//	bson.E{Key: "storage_ip", Value: storageMachine.StoreIP},
-		//	bson.E{Key: "storage_path", Value: storageMachine.StorePath},
-		//}
-		//err = myMongo.UpdateSector(filter, update)
-		//if err != nil {
-		//	return err
-		//}
+		filter := bson.M{
+			"sector_ref.id.number": uint64(sector.ID.Number),
+		}
+		update := bson.M{}
+		update["$set"] = bson.D{
+			bson.E{Key: "storage_ip", Value: storageMachine.StoreIP},
+			bson.E{Key: "storage_path", Value: storageMachine.StorePath},
+		}
+		err = myMongo.UpdateSector(filter, update)
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 
