@@ -98,6 +98,7 @@ type Machine struct {
 	MaxParallelMigrateSectorSize uint64 `json:"max_parallel_migrate_sector_size" bson:"MaxParallelMigrateSectorSize"`
 	Parallelmigratesectorsize    uint64 `json:"parallelmigratesectorsize" bson:"parallelmigratesectorsize"`
 	MaxStoreSectorSize           uint64 `json:"max_store_sector_size" bson:"MaxStoreSectorSize"`
+	Storesectorsize              uint64 `json:"storesectorsize" bson:"storesectorsize"`
 	Status                       int64  `json:"status" bson:"Status"`
 	FtpEnv                       FtpEnv `json:"ftp_env" bson:"FtpEnv"`
 
