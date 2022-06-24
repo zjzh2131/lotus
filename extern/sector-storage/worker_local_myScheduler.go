@@ -490,6 +490,7 @@ func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
 
 		err = migrate(fzReq)
 		if err != nil {
+			fmt.Println("migrate err:", err)
 			myMongo.UpdateStatus(fzReq.ID, "failed")
 			return
 		}
@@ -514,7 +515,13 @@ func migrate(fzReq taskReq) error {
 	if workerMachine == nil {
 		return xerrors.New("不存在该worker")
 	}
-
+	storageMachine, err := myMongo.FindOneMachine(bson.M{
+		"ip":   sid.StorageIp,
+		"role": "storage",
+	})
+	if sid == nil || workerMachine == nil || storageMachine == nil {
+		return xerrors.New("sid/workerMachine/storageMachine is empty")
+	}
 	p := migration.MigrateParam{
 		SectorID:  folder,
 		FromIP:    ip,
@@ -522,9 +529,9 @@ func migrate(fzReq taskReq) error {
 		StoreIP:   sid.StorageIp,
 		StorePath: sid.StoragePath,
 		FtpEnv: migration.FtpEnvStruct{
-			FtpPort:     "21",
-			FtpUser:     "zjzh",
-			FtpPassword: "zjzh516",
+			FtpPort:     storageMachine.FtpEnv.FtpPort,
+			FtpUser:     storageMachine.FtpEnv.FtpUser,
+			FtpPassword: storageMachine.FtpEnv.FtpPassword,
 		},
 	}
 	err = migration.MigrateWithFtp(p, fzReq.RSProof)
@@ -533,7 +540,6 @@ func migrate(fzReq taskReq) error {
 		return err
 	}
 	// 2. update sector storage path
-	myMongo.UpdateSectorStoragePath(fzReq.ID, "")
 	myMongo.UpdateSectorStatus(fzReq.SectorId, "migrated")
 	return nil
 }

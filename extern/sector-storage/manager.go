@@ -432,7 +432,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	var out abi.PieceInfo
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTAddPiece), "done", &out)
+	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTAddPiece), []string{"done", "failed"}, &out)
 	wg.Wait()
 	if err != nil {
 		return abi.PieceInfo{}, err
@@ -497,7 +497,7 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTPreCommit1), "done", &out)
+	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTPreCommit1), []string{"done", "failed"}, &out)
 	wg.Wait()
 	if err != nil {
 		return out, err
@@ -560,7 +560,7 @@ func (m *Manager) SealPreCommit2(ctx context.Context, sector storage.SectorRef, 
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTPreCommit2), "done", &out)
+	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTPreCommit2), []string{"done", "failed"}, &out)
 	wg.Wait()
 	if err != nil {
 		return out, err
@@ -625,7 +625,7 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTCommit1), "done", &out)
+	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTCommit1), []string{"done", "failed"}, &out)
 	wg.Wait()
 	if err != nil {
 		return out, err
@@ -681,7 +681,7 @@ func (m *Manager) SealCommit2(ctx context.Context, sector storage.SectorRef, pha
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTCommit2), "done", &out)
+	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTCommit2), []string{"done", "failed"}, &out)
 	wg.Wait()
 	if err != nil {
 		return out, err
@@ -774,10 +774,16 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		//// TODO option migrate path
 		storageMachine, err := migration.SelectStoreMachine(context.TODO(), migration.NetWorkIOBalance, "")
 		if err != nil {
+			fmt.Println("=========================================================storageMachine err:", err)
 			return err
 		}
+		if storageMachine == nil {
+			fmt.Println("======================================storageMachine is nil=========================================")
+			return xerrors.New("storageMachine is nil")
+		}
+		fmt.Printf("===============================================================storageMachine: %#v\n", storageMachine)
 		if storageMachine.StoreIP == "" || storageMachine.StorePath == "" {
-			fmt.Println("StoreIP,StorePath is empty")
+			fmt.Println("========================================================================StoreIP,StorePath is empty")
 			return err
 		}
 		//
@@ -796,9 +802,10 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		return nil
 	})
 
+	// TODO
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTFinalize), "done", &out)
+	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTFinalize), []string{"done", "failed"}, &out)
 	wg.Wait()
 	if err != nil {
 		return err

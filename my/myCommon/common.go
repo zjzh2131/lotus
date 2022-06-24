@@ -1,10 +1,12 @@
 package myCommon
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
+	migration "github.com/filecoin-project/lotus/my/migrate"
 	"github.com/filecoin-project/lotus/my/myModel"
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
@@ -15,7 +17,7 @@ import (
 	"time"
 )
 
-func WaitResult(wg *sync.WaitGroup, sectorId uint64, taskType, taskStatus string, out interface{}) error {
+func WaitResult(wg *sync.WaitGroup, sectorId uint64, taskType string, taskStatus []string, out interface{}) error {
 	defer wg.Done()
 	heartbeat := time.NewTicker(10 * time.Second)
 	for {
@@ -33,6 +35,31 @@ func WaitResult(wg *sync.WaitGroup, sectorId uint64, taskType, taskStatus string
 
 			// step2: write out
 			task = tasks[0]
+			if task.TaskStatus == "failed" {
+				// TODO
+				if task.TaskType == "seal/v0/finalize" {
+					sid, err := myMongo.FindSectorsBySid(sectorId)
+					if err != nil {
+						return err
+					}
+					if err := migration.CancelStoreMachine(context.TODO(), &migration.MigrateTasks{StorePath: sid.StoragePath, StoreIP: sid.StorageIp}); err != nil {
+						fmt.Println("CancelStoreMachine err ", err)
+					}
+					fmt.Println("[=====================================CancelStoreMachine Success=====================================]")
+				}
+				e := fmt.Sprintf("child process run task failed, ObjId: [%v], taskType: [%v]", task.ID, task.TaskType)
+				return xerrors.New(e)
+			}
+			if task.TaskType == "seal/v0/finalize" {
+				sid, err := myMongo.FindSectorsBySid(sectorId)
+				if err != nil {
+					return err
+				}
+				if err := migration.DoneStoreMachine(context.TODO(), &migration.MigrateTasks{StorePath: sid.StoragePath, StoreIP: sid.StorageIp}); err != nil {
+					fmt.Println("DoneStoreMachine err ", err)
+				}
+				fmt.Println("[=====================================DoneStoreMachine Success=====================================]")
+			}
 			ok, err := assignmentOut(task, out)
 			if ok {
 				_ = myMongo.UpdateStatus(task.ID, "finish")

@@ -66,14 +66,16 @@ func FindByStatus(taskStatus string) ([]*myModel.SealingTask, error) {
 	return tasks, nil
 }
 
-func FindBySIdTypeStatus(sId uint64, taskType, taskStatus string) ([]*myModel.SealingTask, error) {
+func FindBySIdTypeStatus(sId uint64, taskType string, taskStatus []string) ([]*myModel.SealingTask, error) {
 	filter := bson.M{
-		"$and": []interface{}{
-			bson.M{"sector_ref.id.number": sId},
-			bson.M{"task_type": taskType},
-			bson.M{"task_status": taskStatus},
-		},
+		"sector_ref.id.number": sId,
+		"task_type":            taskType,
 	}
+	orQuery := []bson.M{}
+	for _, v := range taskStatus {
+		orQuery = append(orQuery, bson.M{"task_status": v})
+	}
+	filter["$or"] = orQuery
 	tasks, err := findTasks(filter, 0)
 	if err != nil {
 		return nil, err
