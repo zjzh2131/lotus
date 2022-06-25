@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/filecoin-project/lotus/my/myCommon"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -275,6 +276,11 @@ var initCmd = &cli.Command{
 			}
 			return xerrors.Errorf("Storage-miner init failed")
 		}
+
+		// mount storage path
+		fmt.Println("start mount all storage")
+		myCommon.MountAllStorage()
+		fmt.Println("done mount all storage")
 
 		// TODO: Point to setting storage price, maybe do it interactively or something
 		log.Info("Miner successfully created, you can now start it with 'lotus-miner run'")

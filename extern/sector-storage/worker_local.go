@@ -3,6 +3,10 @@ package sectorstorage
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/filecoin-project/lotus/my/db/myMongo"
+	"github.com/filecoin-project/lotus/my/myUtils"
+	"go.mongodb.org/mongo-driver/bson"
 	"io"
 	"os"
 	"reflect"
@@ -132,6 +136,62 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc,
 			}
 		}
 	}()
+
+	minerMachine, err := myMongo.FindOneMachine(bson.M{
+		"role": "miner",
+		"ip":   myUtils.GetLocalIPv4s(),
+	})
+	if err != nil {
+		panic("保证worker不是运行在miner")
+	}
+	// 保证worker不是运行在miner
+	if minerMachine == nil {
+		sc = &SchedulerControl{
+			lk:        &sync.Mutex{},
+			AP:        make(chan taskReq, 10),
+			P1:        make(chan taskReq, 10),
+			P2:        make(chan taskReq, 10),
+			C1:        make(chan taskReq, 10),
+			C2:        make(chan taskReq, 10),
+			FZ:        make(chan taskReq, 10),
+			ApP1:      make(chan struct{}, 10),
+			P2C2:      make(chan struct{}, 10),
+			SealingM:  make(map[uint64]struct{}, 10),
+			SealingCh: make(chan struct{}, 10),
+			closing:   w.closing,
+		}
+
+		// TODO add map
+		myMongo.Transaction(func() error {
+			var sids []uint64
+			sts, err := myMongo.FindSectorsByWorkerIp(myUtils.GetLocalIPv4s(), "")
+			if err != nil {
+				return err
+			}
+			for _, v := range sts {
+				sids = append(sids, uint64(v.SectorRef.ID.Number))
+			}
+			fmt.Println(sids)
+			filter := bson.M{
+				"sector_ref.id.number": bson.M{"$in": sids},
+			}
+			update := bson.M{}
+			update["$set"] = bson.D{
+				bson.E{Key: "task_status", Value: "failed"},
+			}
+			err = myMongo.UpdateTask(filter, update)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+
+		log.Info("=================================myScheduler start=========================================")
+		//go w.myScheduler()
+		go sc.myScheduler()
+		go sc.myCallChildProcess()
+		log.Info("=================================myScheduler done=========================================")
+	}
 
 	return w
 }
@@ -290,7 +350,7 @@ func (l *LocalWorker) asyncCall(ctx context.Context, sector storage.SectorRef, r
 				log.Errorf("get hostname err: %+v", err)
 			}
 
-			err = xerrors.Errorf("%w [Hostname: %s]", err.Error(), hostname)
+			err = xerrors.Errorf("%w [Hostname: %s]", err, hostname)
 		}
 
 		if doReturn(ctx, rt, ci, l.ret, res, toCallError(err)) {
@@ -525,6 +585,7 @@ func (l *LocalWorker) ReleaseUnsealed(ctx context.Context, sector storage.Sector
 }
 
 func (l *LocalWorker) Remove(ctx context.Context, sector abi.SectorID) error {
+	// TODO remove cp
 	var err error
 
 	if rerr := l.storage.Remove(ctx, sector, storiface.FTSealed, true, nil); rerr != nil {

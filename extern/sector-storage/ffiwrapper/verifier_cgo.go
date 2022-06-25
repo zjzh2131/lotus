@@ -5,7 +5,6 @@ package ffiwrapper
 
 import (
 	"context"
-
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 

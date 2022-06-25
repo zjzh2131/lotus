@@ -3,6 +3,10 @@ package stores
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/filecoin-project/lotus/my/db/myMongo"
+	"github.com/filecoin-project/lotus/my/myUtils"
+	"go.mongodb.org/mongo-driver/bson"
 	"io/ioutil"
 	"math/bits"
 	"math/rand"
@@ -89,6 +93,8 @@ type path struct {
 }
 
 func (p *path) stat(ls LocalStorage) (fsutil.FsStat, error) {
+	start := time.Now()
+
 	stat, err := ls.Stat(p.local)
 	if err != nil {
 		return fsutil.FsStat{}, xerrors.Errorf("stat %s: %w", p.local, err)
@@ -156,6 +162,10 @@ func (p *path) stat(ls LocalStorage) (fsutil.FsStat, error) {
 		}
 	}
 
+	if time.Now().Sub(start) > 5*time.Second {
+		log.Warnw("slow storage stat", "took", time.Now().Sub(start), "reservations", len(p.reservations))
+	}
+
 	return stat, err
 }
 
@@ -167,7 +177,7 @@ type URLs []string
 
 func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []string) (*Local, error) {
 	l := &Local{
-		localStorage: ls,
+		localStorage: newCachedLocalStorage(ls),
 		index:        index,
 		urls:         urls,
 
@@ -518,7 +528,24 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 		allocate ^= fileType
 	}
 
-	return out, storageIDs, nil
+	s, _ := myMongo.FindSectorsBySid(uint64(sid.ID.Number))
+	filter := bson.M{
+		"ip":   myUtils.GetLocalIPv4s(),
+		"role": "miner",
+	}
+	m, _ := myMongo.FindOneMachine(filter)
+	//b.Root = s.StoragePath
+	if s != nil && m != nil {
+		if s.StorageIp != "" && m.MinerMountPath != "" {
+			// 确保已经挂载
+			folder := fmt.Sprintf("s-t0%v-%v", sid.ID.Miner, sid.ID.Number)
+			out.Cache = filepath.Join(m.MinerMountPath, s.StorageIp, "cache", folder)
+			out.Sealed = filepath.Join(m.MinerMountPath, s.StorageIp, "sealed", folder)
+			out.Unsealed = filepath.Join(m.MinerMountPath, s.StorageIp, "unsealed", folder)
+		}
+	}
+	fmt.Printf("=======================================================proving path:%#v\n", out)
+	return out, out, nil
 }
 
 func (st *Local) Local(ctx context.Context) ([]storiface.StoragePath, error) {
@@ -724,12 +751,14 @@ func (st *Local) GenerateSingleVanillaProof(ctx context.Context, minerID abi.Act
 	var sealed string
 	if si.Update {
 		src, _, err := st.AcquireSector(ctx, sr, storiface.FTUpdate|storiface.FTUpdateCache, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
+		fmt.Printf("=====================================================caice path:%#v\n", src)
 		if err != nil {
 			return nil, xerrors.Errorf("acquire sector: %w", err)
 		}
 		cache, sealed = src.UpdateCache, src.Update
 	} else {
 		src, _, err := st.AcquireSector(ctx, sr, storiface.FTSealed|storiface.FTCache, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
+		fmt.Printf("=====================================================no caice path:%#v\n", src)
 		if err != nil {
 			return nil, xerrors.Errorf("acquire sector: %w", err)
 		}

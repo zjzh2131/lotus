@@ -23,6 +23,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
 	"github.com/filecoin-project/lotus/genesis"
+	//"time"
+	//"github.com/filecoin-project/lotus/my/migrate"
 )
 
 var log = logging.Logger("lotus-seed")

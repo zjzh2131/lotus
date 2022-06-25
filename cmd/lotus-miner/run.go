@@ -21,6 +21,7 @@ import (
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/ulimit"
 	"github.com/filecoin-project/lotus/metrics"
+	"github.com/filecoin-project/lotus/my/migrate"
 	"github.com/filecoin-project/lotus/node"
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
@@ -190,6 +191,8 @@ var runCmd = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to start json-rpc endpoint: %s", err)
 		}
+
+		go migration.MonitorStoreMachine()
 
 		// Monitor for shutdown.
 		finishCh := node.MonitorShutdown(shutdownChan,
