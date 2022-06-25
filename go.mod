@@ -143,7 +143,7 @@ require (
 	github.com/prometheus/client_golang v1.12.1
 	github.com/raulk/clock v1.1.0
 	github.com/raulk/go-watchdog v1.2.0
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.7.2
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/whyrusleeping/bencher v0.0.0-20190829221104-bb6607aa8bba
@@ -167,6 +167,14 @@ require (
 	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
 	gotest.tools v2.2.0+incompatible
+)
+
+require (
+	github.com/docker/docker v20.10.17+incompatible
+	github.com/go-redis/redis v6.15.9+incompatible
+	github.com/jlaffaye/ftp v0.0.0-20220612151834-60a941566ce4
+	github.com/square/mongo-lock v0.0.0-20220601164918-701ecf357cd7
+	go.mongodb.org/mongo-driver v1.9.1
 )
 
 require (
@@ -217,6 +225,7 @@ require (
 	github.com/go-openapi/jsonreference v0.19.4 // indirect
 	github.com/go-openapi/spec v0.19.11 // indirect
 	github.com/go-openapi/swag v0.19.11 // indirect
+	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -311,6 +320,7 @@ require (
 	github.com/prometheus/common v0.33.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/prometheus/statsd_exporter v0.21.0 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/rivo/uniseg v0.1.0 // indirect
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/russross/blackfriday/v2 v2.0.1 // indirect
@@ -319,6 +329,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
+	github.com/tj/go-spin v1.1.0 // indirect
 	github.com/uber/jaeger-client-go v2.25.0+incompatible // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.0.1 // indirect
@@ -326,6 +337,12 @@ require (
 	github.com/whyrusleeping/chunker v0.0.0-20181014151217-fe64bd25879f // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee // indirect
+	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
+	github.com/xdg-go/scram v1.0.2 // indirect
+	github.com/xdg-go/stringprep v1.0.2 // indirect
+	github.com/xlab/c-for-go v0.0.0-20201112171043-ea6dce5809cb // indirect
+	github.com/xlab/pkgconfig v0.0.0-20170226114623-cea12a0fd245 // indirect
+	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	github.com/zondax/hid v0.9.0 // indirect
 	github.com/zondax/ledger-go v0.12.1 // indirect
 	go.opentelemetry.io/otel/metric v0.25.0 // indirect
@@ -344,9 +361,15 @@ require (
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gotest.tools/v3 v3.3.0 // indirect
 	howett.net/plist v0.0.0-20181124034731-591f970eefbb // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
+	modernc.org/cc v1.0.0 // indirect
+	modernc.org/golex v1.0.1 // indirect
+	modernc.org/mathutil v1.1.1 // indirect
+	modernc.org/strutil v1.1.0 // indirect
+	modernc.org/xc v1.0.0 // indirect
 )
 
 replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi

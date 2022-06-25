@@ -32,7 +32,6 @@ func init() {
 	//MongoHandler = InitMongo("mongodb://124.220.208.74:27017", "lotus", 10*time.Second, 100)
 	//MongoHandler = InitMongo("mongodb://192.168.0.22:27017", "lotus", 10*time.Second, 100)
 	url := os.Getenv("MONGO_URL")
-	fmt.Printf(url)
 	MongoHandler = InitMongo(url, "lotus", 10*time.Second, 100)
 }
 
