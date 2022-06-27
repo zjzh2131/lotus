@@ -2,6 +2,8 @@ package migration
 
 import (
 	"context"
+	"os"
+
 	//"github.com/filecoin-project/lotus/extern/sector-storage/config"
 	//"github.com/filecoin-project/lotus/extern/sector-storage/service/db"
 	//"github.com/filecoin-project/lotus/extern/sector-storage/service/mod"
@@ -310,8 +312,9 @@ func (smh *StoreMachineHandle) CancelStoreMachine(ctx context.Context, task *Mig
 }
 
 func init() {
-	MongoHandler = InitMongo("mongodb://124.220.208.74:27017", "lotus", 10*time.Second, 100)
-	//MongoHandler = InitMongo("mongodb://192.168.0.11:27017", "test", 10*time.Second, 100)
+	//MongoHandler = InitMongo("mongodb://124.220.208.74:27017", "lotus", 10*time.Second, 100)
+	url := os.Getenv("MONGO_URL")
+	MongoHandler = InitMongo(url, "test", 10*time.Second, 100)
 }
 
 func InitMongo(uri, name string, timeout time.Duration, num uint64) *mongo.Database {
