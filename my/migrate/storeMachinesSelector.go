@@ -314,7 +314,7 @@ func (smh *StoreMachineHandle) CancelStoreMachine(ctx context.Context, task *Mig
 func init() {
 	//MongoHandler = InitMongo("mongodb://124.220.208.74:27017", "lotus", 10*time.Second, 100)
 	url := os.Getenv("MONGO_URL")
-	MongoHandler = InitMongo(url, "test", 10*time.Second, 100)
+	MongoHandler = InitMongo(url, "lotus", 10*time.Second, 100)
 }
 
 func InitMongo(uri, name string, timeout time.Duration, num uint64) *mongo.Database {
