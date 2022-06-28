@@ -6,7 +6,6 @@ import (
 	"github.com/filecoin-project/lotus/my/myModel"
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
-	lock "github.com/square/mongo-lock"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"os"
@@ -20,7 +19,7 @@ import (
 
 var (
 	MongoHandler *mongo.Database
-	MongoLock    *lock.Client
+	//MongoLock    *lock.Client
 )
 
 const (
@@ -36,14 +35,14 @@ func init() {
 	url := os.Getenv("MONGO_URL")
 	MongoHandler = InitMongo(url, "lotus", 10*time.Second, 100)
 
-	MongoLock = lock.NewClient(MongoHandler.Collection("locks"))
+	//MongoLock = lock.NewClient(MongoHandler.Collection("locks"))
 
 	// Create the required and recommended indexes.
-	err := MongoLock.CreateIndexes(context.TODO())
-	if err != nil {
-		fmt.Println("CreateIndexes err:", err)
-		return
-	}
+	//err := MongoLock.CreateIndexes(context.TODO())
+	//if err != nil {
+	//	fmt.Println("CreateIndexes err:", err)
+	//	return
+	//}
 }
 
 func InitMongo(uri, name string, timeout time.Duration, num uint64) *mongo.Database {
