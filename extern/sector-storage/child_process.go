@@ -27,6 +27,8 @@ import (
 
 func init() {
 	myReexec.Register("seal/v0/addpiece", func() error {
+		log.Infof("ap child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+
 		var err error
 		taskId := os.Args[1]
 		err = ap(taskId)
@@ -36,6 +38,7 @@ func init() {
 		return nil
 	})
 	myReexec.Register("seal/v0/precommit/1", func() error {
+		log.Infof("p1 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
 		var err error
 		taskId := os.Args[1]
 		err = p1(taskId)
@@ -45,6 +48,8 @@ func init() {
 		return nil
 	})
 	myReexec.Register("seal/v0/precommit/2", func() error {
+		log.Infof("p2 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+
 		var err error
 		taskId := os.Args[1]
 		err = p2(taskId)
@@ -54,6 +59,8 @@ func init() {
 		return nil
 	})
 	myReexec.Register("seal/v0/commit/1", func() error {
+		log.Infof("c1 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+
 		var err error
 		taskId := os.Args[1]
 		err = c1(taskId)
@@ -63,6 +70,8 @@ func init() {
 		return nil
 	})
 	myReexec.Register("seal/v0/commit/2", func() error {
+		log.Infof("c2 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+
 		var err error
 		taskId := os.Args[1]
 		err = c2(taskId)
@@ -72,6 +81,8 @@ func init() {
 		return nil
 	})
 	myReexec.Register("seal/v0/finalize", func() error {
+		log.Infof("fz child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+
 		var err error
 		taskId := os.Args[1]
 		err = fs(taskId)
