@@ -64,7 +64,7 @@ func (sc *SchedulerControl) myScheduler() {
 		}
 
 		// 分配完任务进入一个短暂的休眠等待任务执行
-		//restInterval := time.NewTicker(10 * time.Second)
+		//restInterval := time.NewTicker(1 * time.Second)
 		//select {
 		//case <-restInterval.C:
 		//}
@@ -197,12 +197,12 @@ func (sc *SchedulerControl) onceScheduler() error {
 	//ctx := context.TODO()
 	//err := myMongo.MongoLock.XLock(ctx, "global_lock", myMongo.LockId, lock.LockDetails{})
 	//if err != nil {
-	//	log.Fatal(err)
+	//	return err
 	//}
 	//defer func() {
 	//	_, err = myMongo.MongoLock.Unlock(ctx, myMongo.LockId)
 	//	if err != nil {
-	//		log.Fatal(err)
+	//		log.Warn(err)
 	//	}
 	//}()
 
@@ -211,9 +211,10 @@ func (sc *SchedulerControl) onceScheduler() error {
 		return err
 	}
 	for _, task := range tasks {
+		log.Infof("get task, objId: [%v], sector_id: [%v], task_type: [%v]\n", task.ID.String(), task.SectorRef.ID.Number, task.TaskType)
 		// step 3. resource placeholder
 		if _, ok := sc.SealingM[uint64(task.SectorRef.ID.Number)]; !ok {
-			outTick := time.NewTicker(10 * time.Second)
+			outTick := time.NewTicker(1 * time.Second)
 			select {
 			case sc.SealingCh <- struct{}{}:
 				sc.lk.Lock()
@@ -240,12 +241,13 @@ func (sc *SchedulerControl) onceScheduler() error {
 		case "seal/v0/finalize":
 			sc.finalizeSector(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef.ProofType, task.SectorRef)
 		}
+		fmt.Println(sc.String())
 	}
 	return nil
 }
 
 func (sc *SchedulerControl) ap(taskId primitive.ObjectID, taskType string, sid uint64) {
-	outTick := time.NewTicker(10 * time.Second)
+	outTick := time.NewTicker(1 * time.Second)
 	select {
 	case sc.ApP1 <- struct{}{}:
 	case <-outTick.C:
@@ -271,7 +273,7 @@ func (sc *SchedulerControl) ap(taskId primitive.ObjectID, taskType string, sid u
 }
 
 func (sc *SchedulerControl) p1(taskId primitive.ObjectID, taskType string, sid uint64) {
-	outTick := time.NewTicker(10 * time.Second)
+	outTick := time.NewTicker(1 * time.Second)
 	select {
 	case sc.ApP1 <- struct{}{}:
 	case <-outTick.C:
@@ -297,7 +299,7 @@ func (sc *SchedulerControl) p1(taskId primitive.ObjectID, taskType string, sid u
 }
 
 func (sc *SchedulerControl) p2(taskId primitive.ObjectID, taskType string, sid uint64) {
-	outTick := time.NewTicker(10 * time.Second)
+	outTick := time.NewTicker(1 * time.Second)
 	select {
 	case sc.P2C2 <- struct{}{}:
 	case <-outTick.C:
@@ -339,7 +341,7 @@ func (sc *SchedulerControl) c1(taskId primitive.ObjectID, taskType string, sid u
 }
 
 func (sc *SchedulerControl) c2(taskId primitive.ObjectID, taskType string, sid uint64) {
-	outTick := time.NewTicker(10 * time.Second)
+	outTick := time.NewTicker(1 * time.Second)
 	select {
 	case sc.P2C2 <- struct{}{}:
 	case <-outTick.C:
@@ -394,10 +396,12 @@ func (sc *SchedulerControl) apCp(apReq taskReq) {
 			<-sc.ApP1
 		}()
 
+		log.Infof("apCp start: SectorId(%v)\n", apReq.SectorId)
 		err := callChildProcess([]string{apReq.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(apReq.ID, "failed")
 		}
+		log.Infof("apCp end: SectorId(%v)\n", apReq.SectorId)
 	}()
 }
 
@@ -412,10 +416,12 @@ func (sc *SchedulerControl) p1Cp(p1Req taskReq) {
 			<-sc.ApP1
 		}()
 
+		log.Infof("p1Cp start: SectorId(%v)\n", p1Req.SectorId)
 		err := callChildProcess([]string{p1Req.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(p1Req.ID, "failed")
 		}
+		log.Infof("p1Cp end: SectorId(%v)\n", p1Req.SectorId)
 	}()
 }
 
@@ -430,10 +436,12 @@ func (sc *SchedulerControl) p2Cp(p2Req taskReq) {
 			<-sc.P2C2
 		}()
 
+		log.Infof("p2Cp start: SectorId(%v)\n", p2Req.SectorId)
 		err := callChildProcess([]string{p2Req.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(p2Req.ID, "failed")
 		}
+		log.Infof("p2Cp end: SectorId(%v)\n", p2Req.SectorId)
 	}()
 }
 
@@ -444,10 +452,12 @@ func (sc *SchedulerControl) c1Cp(c1Req taskReq) {
 	id := fmt.Sprintf("%v", c1Req.ID)
 	id = strings.Split(id, `"`)[1]
 	go func() {
+		log.Infof("c1Cp start: SectorId(%v)\n", c1Req.SectorId)
 		err := callChildProcess([]string{c1Req.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(c1Req.ID, "failed")
 		}
+		log.Infof("c1Cp end: SectorId(%v)\n", c1Req.SectorId)
 	}()
 }
 
@@ -462,10 +472,12 @@ func (sc *SchedulerControl) c2Cp(c2Req taskReq) {
 			<-sc.P2C2
 		}()
 
+		log.Infof("c2Cp start: SectorId(%v)\n", c2Req.SectorId)
 		err := callChildProcess([]string{c2Req.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(c2Req.ID, "failed")
 		}
+		log.Infof("c2Cp end: SectorId(%v)\n", c2Req.SectorId)
 	}()
 }
 
@@ -481,20 +493,45 @@ func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
 			delete(sc.SealingM, uint64(fzReq.SectorId))
 		}()
 
+		log.Infof("finalizeSectorCp start: SectorId(%v)\n", fzReq.SectorId)
 		err := callChildProcess([]string{fzReq.TaskType, id})
 		if err != nil {
 			myMongo.UpdateStatus(fzReq.ID, "failed")
 			return
 		}
 		myMongo.UpdateSectorStatus(fzReq.SectorId, "living")
+		log.Infof("finalizeSectorCp end: SectorId(%v)\n", fzReq.SectorId)
 
+		log.Infof("migrate start: SectorId(%v)\n", fzReq.SectorId)
 		err = migrate(fzReq)
 		if err != nil {
 			fmt.Println("migrate err:", err)
 			myMongo.UpdateStatus(fzReq.ID, "failed")
 			return
 		}
+		log.Infof("migrate end: SectorId(%v)\n", fzReq.SectorId)
 	}()
+}
+
+func (sc *SchedulerControl) String() string {
+	var sealingMArr []string
+	for key := range sc.SealingM {
+		e := fmt.Sprintf("SectorId(%d)", key)
+		sealingMArr = append(sealingMArr, e)
+	}
+	sealingMStr := "sealing sector:" + "[" + strings.Join(sealingMArr, ",") + "]\n"
+	sealingStr := fmt.Sprintf("sealing len: %d, cap: %d\n", len(sc.SealingCh), cap(sc.SealingCh))
+
+	apP1Str := fmt.Sprintf("apP1 len: %d, cap: %d\n", len(sc.ApP1), cap(sc.ApP1))
+	p2c2Str := fmt.Sprintf("p2C2 len: %d, cap: %d\n", len(sc.P2C2), cap(sc.P2C2))
+
+	aPStr := fmt.Sprintf("ap len: %d, cap: %d\n", len(sc.AP), cap(sc.AP))
+	p1Str := fmt.Sprintf("p1 len: %d, cap: %d\n", len(sc.P1), cap(sc.P1))
+	p2Str := fmt.Sprintf("p2 len: %d, cap: %d\n", len(sc.P2), cap(sc.P2))
+	c1Str := fmt.Sprintf("c1 len: %d, cap: %d\n", len(sc.C1), cap(sc.C1))
+	c2Str := fmt.Sprintf("c2 len: %d, cap: %d\n", len(sc.C2), cap(sc.C2))
+	fzStr := fmt.Sprintf("fz len: %d, cap: %d\n", len(sc.FZ), cap(sc.FZ))
+	return sealingMStr + sealingStr + apP1Str + p2c2Str + aPStr + p1Str + p2Str + c1Str + c2Str + fzStr
 }
 
 func migrate(fzReq taskReq) error {
@@ -570,7 +607,7 @@ func (l *LocalWorker) myScheduler() {
 			return
 		}
 
-		time.Sleep(10 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
+	"github.com/hashicorp/go-multierror"
 	"go.mongodb.org/mongo-driver/bson"
 	"path/filepath"
 	"time"
@@ -96,37 +97,57 @@ func callChildProcess(args []string) error {
 }
 
 func ap(taskId string) error {
+	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
+	defer func() {
+		if resultError != nil {
+			update := bson.M{}
+			update["$set"] = bson.D{
+				bson.E{Key: "task_error", Value: resultError.Error()},
+			}
+			myMongo.UpdateTask(bson.M{"_id": task.ID}, update)
+		}
+	}()
+
 	sb, err := ffiwrapper.New(&MyTmpLocalWorkerPathProvider{})
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
 	var param0 myModel.APParam0
-	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
-	size, _ := strconv.Atoi(task.TaskParameters[1])
+	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
+	size, err := strconv.Atoi(task.TaskParameters[1])
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
 
 	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
 	if err != nil {
-		return err
+		resultError = multierror.Append(resultError, err)
 	}
-	//err = myMongo.UpdateStatus(task.ID, "running")
-	//if err != nil {
-	//	return err
-	//}
 
 	piece, err := sb.AddPiece(context.TODO(), task.SectorRef, param0, abi.UnpaddedPieceSize(size), nullreader.NewNullReader(abi.UnpaddedPieceSize(size)))
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
-	strPiece, _ := json.Marshal(piece)
-	//myMongo.UpdateStatus(task.ID, "done")
-	//myMongo.UpdateResult(task.ID, string(strPiece))
+	strPiece, err := json.Marshal(piece)
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
 
 	err = myMongo.UpdateTaskLog(logId, bson.M{
 		"$set": bson.D{
@@ -135,46 +156,62 @@ func ap(taskId string) error {
 			bson.E{Key: "updated_by", Value: myUtils.GetLocalIPv4s()},
 		},
 	})
+	resultError = multierror.Append(resultError, err)
+
 	err = myMongo.UpdateTaskResStatus(task.ID, "done", string(strPiece))
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 	return nil
 }
 
 func p1(taskId string) error {
+	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
+	defer func() {
+		if resultError != nil {
+			update := bson.M{}
+			update["$set"] = bson.D{
+				bson.E{Key: "task_error", Value: resultError.Error()},
+			}
+			myMongo.UpdateTask(bson.M{"_id": task.ID}, update)
+		}
+	}()
+
 	sb, err := ffiwrapper.New(&MyTmpLocalWorkerPathProvider{})
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
 	var param0 abi.SealRandomness
 	var param1 []abi.PieceInfo
-	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
-	_ = json.Unmarshal([]byte(task.TaskParameters[1]), &param1)
+	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	resultError = multierror.Append(resultError, err)
+	err = json.Unmarshal([]byte(task.TaskParameters[1]), &param1)
+	resultError = multierror.Append(resultError, err)
 
 	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
 	if err != nil {
-		return err
+		resultError = multierror.Append(resultError, err)
 	}
-
-	//err = myMongo.UpdateStatus(task.ID, "running")
-	//if err != nil {
-	//	return err
-	//}
 
 	p1Out, err := sb.SealPreCommit1(context.TODO(), task.SectorRef, param0, param1)
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
-	p1OutByte, _ := json.Marshal(p1Out)
-	//myMongo.UpdateStatus(c.task.ID, "done")
-	//myMongo.UpdateResult(c.task.ID, string(p1OutByte))
+	p1OutByte, err := json.Marshal(p1Out)
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
 
 	err = myMongo.UpdateTaskLog(logId, bson.M{
 		"$set": bson.D{
@@ -183,44 +220,59 @@ func p1(taskId string) error {
 			bson.E{Key: "updated_by", Value: myUtils.GetLocalIPv4s()},
 		},
 	})
+	resultError = multierror.Append(resultError, err)
 	err = myMongo.UpdateTaskResStatus(task.ID, "done", string(p1OutByte))
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 	return nil
 }
 
 func p2(taskId string) error {
+	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
+	defer func() {
+		if resultError != nil {
+			update := bson.M{}
+			update["$set"] = bson.D{
+				bson.E{Key: "task_error", Value: resultError.Error()},
+			}
+			myMongo.UpdateTask(bson.M{"_id": task.ID}, update)
+		}
+	}()
+
 	sb, err := ffiwrapper.New(&MyTmpLocalWorkerPathProvider{})
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
 	var param0 storage.PreCommit1Out
-	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	resultError = multierror.Append(resultError, err)
 
 	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
 	if err != nil {
-		return err
+		resultError = multierror.Append(resultError, err)
 	}
-
-	//err = myMongo.UpdateStatus(task.ID, "running")
-	//if err != nil {
-	//	return err
-	//}
 
 	p2Out, err := sb.SealPreCommit2(context.TODO(), task.SectorRef, param0)
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
-	p2OutByte, _ := json.Marshal(p2Out)
-	//myMongo.UpdateStatus(c.task.ID, "done")
-	//myMongo.UpdateResult(c.task.ID, string(p2OutByte))
+	p2OutByte, err := json.Marshal(p2Out)
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
+
 	err = myMongo.UpdateTaskLog(logId, bson.M{
 		"$set": bson.D{
 			bson.E{Key: "end_time", Value: time.Now().UnixMilli()},
@@ -228,21 +280,37 @@ func p2(taskId string) error {
 			bson.E{Key: "updated_by", Value: myUtils.GetLocalIPv4s()},
 		},
 	})
+	resultError = multierror.Append(resultError, err)
+
 	err = myMongo.UpdateTaskResStatus(task.ID, "done", string(p2OutByte))
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 	return nil
 }
 
 func c1(taskId string) error {
+	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
+	defer func() {
+		if resultError != nil {
+			update := bson.M{}
+			update["$set"] = bson.D{
+				bson.E{Key: "task_error", Value: resultError.Error()},
+			}
+			myMongo.UpdateTask(bson.M{"_id": task.ID}, update)
+		}
+	}()
+
 	sb, err := ffiwrapper.New(&MyTmpLocalWorkerPathProvider{})
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
@@ -250,28 +318,30 @@ func c1(taskId string) error {
 	var param1 abi.InteractiveSealRandomness
 	var param2 []abi.PieceInfo
 	var param3 storage.SectorCids
-	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
-	_ = json.Unmarshal([]byte(task.TaskParameters[1]), &param1)
-	_ = json.Unmarshal([]byte(task.TaskParameters[2]), &param2)
-	_ = json.Unmarshal([]byte(task.TaskParameters[3]), &param3)
+	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	resultError = multierror.Append(resultError, err)
+	err = json.Unmarshal([]byte(task.TaskParameters[1]), &param1)
+	resultError = multierror.Append(resultError, err)
+	err = json.Unmarshal([]byte(task.TaskParameters[2]), &param2)
+	resultError = multierror.Append(resultError, err)
+	err = json.Unmarshal([]byte(task.TaskParameters[3]), &param3)
+	resultError = multierror.Append(resultError, err)
 
 	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
 	if err != nil {
-		return err
+		resultError = multierror.Append(resultError, err)
 	}
-
-	//err = myMongo.UpdateStatus(task.ID, "running")
-	//if err != nil {
-	//	return err
-	//}
 
 	c1Out, err := sb.SealCommit1(context.TODO(), task.SectorRef, param0, param1, param2, param3)
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
-	c1OutByte, _ := json.Marshal(c1Out)
-	//myMongo.UpdateStatus(c.task.ID, "done")
-	//myMongo.UpdateResult(c.task.ID, string(c1OutByte))
+	c1OutByte, err := json.Marshal(c1Out)
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
 
 	err = myMongo.UpdateTaskLog(logId, bson.M{
 		"$set": bson.D{
@@ -280,18 +350,32 @@ func c1(taskId string) error {
 			bson.E{Key: "updated_by", Value: myUtils.GetLocalIPv4s()},
 		},
 	})
+	resultError = multierror.Append(resultError, err)
 	err = myMongo.UpdateTaskResStatus(task.ID, "done", string(c1OutByte))
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 	return nil
 }
 
 func c2(taskId string) error {
+	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
+
+	defer func() {
+		if resultError != nil {
+			update := bson.M{}
+			update["$set"] = bson.D{
+				bson.E{Key: "task_error", Value: resultError.Error()},
+			}
+			myMongo.UpdateTask(bson.M{"_id": task.ID}, update)
+		}
+	}()
 
 	sb, err := ffiwrapper.New(&MyTmpLocalWorkerPathProvider{})
 	if err != nil {
@@ -299,25 +383,24 @@ func c2(taskId string) error {
 	}
 
 	var param0 storage.Commit1Out
-	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	resultError = multierror.Append(resultError, err)
 
 	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
 	if err != nil {
-		return err
+		resultError = multierror.Append(resultError, err)
 	}
-
-	//err = myMongo.UpdateStatus(task.ID, "running")
-	//if err != nil {
-	//	return err
-	//}
 
 	c1Out, err := sb.SealCommit2(context.TODO(), task.SectorRef, param0)
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
-	c2OutByte, _ := json.Marshal(c1Out)
-	//myMongo.UpdateStatus(c.task.ID, "done")
-	//myMongo.UpdateResult(c.task.ID, string(c1OutByte))
+	c2OutByte, err := json.Marshal(c1Out)
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
 
 	err = myMongo.UpdateTaskLog(logId, bson.M{
 		"$set": bson.D{
@@ -326,43 +409,54 @@ func c2(taskId string) error {
 			bson.E{Key: "updated_by", Value: myUtils.GetLocalIPv4s()},
 		},
 	})
+	resultError = multierror.Append(resultError, err)
+
 	err = myMongo.UpdateTaskResStatus(task.ID, "done", string(c2OutByte))
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 	return nil
 }
 
 func fs(taskId string) error {
+	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
+	defer func() {
+		if resultError != nil {
+			update := bson.M{}
+			update["$set"] = bson.D{
+				bson.E{Key: "task_error", Value: resultError.Error()},
+			}
+			myMongo.UpdateTask(bson.M{"_id": task.ID}, update)
+		}
+	}()
+
 	sb, err := ffiwrapper.New(&MyTmpLocalWorkerPathProvider{})
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
 	var param0 []storage.Range
-	_ = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	resultError = multierror.Append(resultError, err)
 
 	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
 	if err != nil {
-		return err
+		resultError = multierror.Append(resultError, err)
 	}
-
-	//err = myMongo.UpdateStatus(task.ID, "running")
-	//if err != nil {
-	//	return err
-	//}
 
 	err = sb.FinalizeSector(context.TODO(), task.SectorRef, param0)
 	if err != nil {
-		//myMongo.UpdateError(c.task.ID, err.Error())
-		//myMongo.UpdateStatus(c.task.ID, "done")
 		err = myMongo.UpdateTaskResStatus(task.ID, "done", err.Error())
 		if err != nil {
+			resultError = multierror.Append(resultError, err)
 			return err
 		}
 		return nil
@@ -375,8 +469,11 @@ func fs(taskId string) error {
 			bson.E{Key: "updated_by", Value: myUtils.GetLocalIPv4s()},
 		},
 	})
+	resultError = multierror.Append(resultError, err)
+
 	err = myMongo.UpdateStatus(task.ID, "done")
 	if err != nil {
+		resultError = multierror.Append(resultError, err)
 		return err
 	}
 	return nil
