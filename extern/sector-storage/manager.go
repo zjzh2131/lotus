@@ -395,8 +395,14 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	//})
 
 	var err error
+	err = myCommon.PreHandleTask(sector, sealtasks.TTAddPiece, "pending")
+	if err != nil {
+		return abi.PieceInfo{}, err
+	}
+
 	s, _ := myMongo.FindSectorsBySid(uint64(sector.ID.Number))
 	if s != nil {
+		// more times
 		err := myMongo.Transaction(func() error {
 			err := myMongo.DelTask(sector, string(sealtasks.TTAddPiece), "finish")
 			if err != nil {
@@ -412,6 +418,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 			return abi.PieceInfo{}, err
 		}
 	} else {
+		// first times
 		err := myMongo.Transaction(func() error {
 			err = myMongo.InitSector(sector, "CC", "")
 			if err != nil {
@@ -488,6 +495,10 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 	//if err != nil {
 	//	return nil, err
 	//}
+	err = myCommon.PreHandleTask(sector, sealtasks.TTPreCommit1, "pending")
+	if err != nil {
+		return out, err
+	}
 
 	err = myMongo.InitTask(sector, string(sealtasks.TTPreCommit1), "pending", []interface{}{ticket, pieces}...)
 	if err != nil {
@@ -551,6 +562,10 @@ func (m *Manager) SealPreCommit2(ctx context.Context, sector storage.SectorRef, 
 	//if err != nil {
 	//	return storage.SectorCids{}, err
 	//}
+	err = myCommon.PreHandleTask(sector, sealtasks.TTPreCommit2, "pending")
+	if err != nil {
+		return out, err
+	}
 
 	err = myMongo.InitTask(sector, string(sealtasks.TTPreCommit2), "pending", []interface{}{phase1Out}...)
 	if err != nil {
@@ -617,6 +632,10 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 	//if err != nil {
 	//	return nil, err
 	//}
+	err = myCommon.PreHandleTask(sector, sealtasks.TTCommit1, "pending")
+	if err != nil {
+		return out, err
+	}
 
 	err = myMongo.InitTask(sector, string(sealtasks.TTCommit1), "pending", []interface{}{ticket, seed, pieces, cids}...)
 	if err != nil {
@@ -673,6 +692,10 @@ func (m *Manager) SealCommit2(ctx context.Context, sector storage.SectorRef, pha
 	//if err != nil {
 	//	return nil, err
 	//}
+	err = myCommon.PreHandleTask(sector, sealtasks.TTCommit2, "pending")
+	if err != nil {
+		return out, err
+	}
 
 	err = myMongo.InitTask(sector, string(sealtasks.TTCommit2), "pending", []interface{}{phase1Out}...)
 	if err != nil {
@@ -766,6 +789,12 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 
 	var err error
 	var out myModel.MyFinalizeSectorOut
+
+	err = myCommon.PreHandleTask(sector, sealtasks.TTFinalize, "pending")
+	if err != nil {
+		return err
+	}
+
 	myMongo.Transaction(func() error {
 		err = myMongo.InitTask(sector, string(sealtasks.TTFinalize), "pending", []interface{}{keepUnsealed}...)
 		if err != nil {

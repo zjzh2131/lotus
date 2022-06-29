@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
+	migration "github.com/filecoin-project/lotus/my/migrate"
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
 	"github.com/hashicorp/go-multierror"
@@ -28,7 +29,6 @@ import (
 func init() {
 	myReexec.Register("seal/v0/addpiece", func() error {
 		log.Infof("ap child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-
 		var err error
 		taskId := os.Args[1]
 		err = ap(taskId)
@@ -49,7 +49,6 @@ func init() {
 	})
 	myReexec.Register("seal/v0/precommit/2", func() error {
 		log.Infof("p2 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-
 		var err error
 		taskId := os.Args[1]
 		err = p2(taskId)
@@ -60,7 +59,6 @@ func init() {
 	})
 	myReexec.Register("seal/v0/commit/1", func() error {
 		log.Infof("c1 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-
 		var err error
 		taskId := os.Args[1]
 		err = c1(taskId)
@@ -71,7 +69,6 @@ func init() {
 	})
 	myReexec.Register("seal/v0/commit/2", func() error {
 		log.Infof("c2 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-
 		var err error
 		taskId := os.Args[1]
 		err = c2(taskId)
@@ -82,7 +79,6 @@ func init() {
 	})
 	myReexec.Register("seal/v0/finalize", func() error {
 		log.Infof("fz child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-
 		var err error
 		taskId := os.Args[1]
 		err = fs(taskId)
@@ -107,7 +103,7 @@ func callChildProcess(args []string) error {
 	return nil
 }
 
-func ap(taskId string) error {
+func ap(taskId string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -116,6 +112,13 @@ func ap(taskId string) error {
 	}
 
 	defer func() {
+		if r := recover(); r != nil {
+			log.Infof("Recovered in ap: %v", r)
+			wrappedError := fmt.Errorf("recover for error: %w", r)
+			resultError = multierror.Append(resultError, wrappedError)
+			err = wrappedError
+		}
+
 		if resultError != nil {
 			update := bson.M{}
 			update["$set"] = bson.D{
@@ -177,7 +180,7 @@ func ap(taskId string) error {
 	return nil
 }
 
-func p1(taskId string) error {
+func p1(taskId string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -186,6 +189,13 @@ func p1(taskId string) error {
 	}
 
 	defer func() {
+		if r := recover(); r != nil {
+			log.Infof("Recovered in p1: %v", r)
+			wrappedError := fmt.Errorf("recover for error: %w", r)
+			resultError = multierror.Append(resultError, wrappedError)
+			err = wrappedError
+		}
+
 		if resultError != nil {
 			update := bson.M{}
 			update["$set"] = bson.D{
@@ -240,7 +250,7 @@ func p1(taskId string) error {
 	return nil
 }
 
-func p2(taskId string) error {
+func p2(taskId string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -249,6 +259,13 @@ func p2(taskId string) error {
 	}
 
 	defer func() {
+		if r := recover(); r != nil {
+			log.Infof("Recovered in p2: %v", r)
+			wrappedError := fmt.Errorf("recover for error: %w", r)
+			resultError = multierror.Append(resultError, wrappedError)
+			err = wrappedError
+		}
+
 		if resultError != nil {
 			update := bson.M{}
 			update["$set"] = bson.D{
@@ -301,7 +318,7 @@ func p2(taskId string) error {
 	return nil
 }
 
-func c1(taskId string) error {
+func c1(taskId string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -310,6 +327,13 @@ func c1(taskId string) error {
 	}
 
 	defer func() {
+		if r := recover(); r != nil {
+			log.Infof("Recovered in c1: %v", r)
+			wrappedError := fmt.Errorf("recover for error: %w", r)
+			resultError = multierror.Append(resultError, wrappedError)
+			err = wrappedError
+		}
+
 		if resultError != nil {
 			update := bson.M{}
 			update["$set"] = bson.D{
@@ -348,9 +372,29 @@ func c1(taskId string) error {
 		resultError = multierror.Append(resultError, err)
 		return err
 	}
-	c1OutByte, err := json.Marshal(c1Out)
+
+	// TODO
+	//c1OutByte, err := json.Marshal(c1Out)
+	//if err != nil {
+	//	resultError = multierror.Append(resultError, err)
+	//	return err
+	//}
+	// step 1 write c1out
+	workerMachine, err := myMongo.FindOneMachine(bson.M{
+		"ip":   myUtils.GetLocalIPv4s(),
+		"role": "worker",
+	})
+	folder := fmt.Sprintf("s-t0%v-%v", task.SectorRef.ID.Miner, task.SectorRef.ID.Number)
+	filePath := filepath.Join(workerMachine.WorkerLocalPath, "c1Out", folder, "c1Out")
+	err = migration.WriteDataToFile(filePath, c1Out)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
+		return err
+	}
+
+	// step ftp migrate
+	err = migrateC1out(task.SectorRef)
+	if err != nil {
 		return err
 	}
 
@@ -362,7 +406,9 @@ func c1(taskId string) error {
 		},
 	})
 	resultError = multierror.Append(resultError, err)
-	err = myMongo.UpdateTaskResStatus(task.ID, "done", string(c1OutByte))
+	// TODO
+
+	err = myMongo.UpdateTaskResStatus(task.ID, "done", "")
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 		return err
@@ -370,7 +416,7 @@ func c1(taskId string) error {
 	return nil
 }
 
-func c2(taskId string) error {
+func c2(taskId string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -379,6 +425,13 @@ func c2(taskId string) error {
 	}
 
 	defer func() {
+		if r := recover(); r != nil {
+			log.Infof("Recovered in c2: %v", r)
+			wrappedError := fmt.Errorf("recover for error: %w", r)
+			resultError = multierror.Append(resultError, wrappedError)
+			err = wrappedError
+		}
+
 		if resultError != nil {
 			update := bson.M{}
 			update["$set"] = bson.D{
@@ -402,12 +455,12 @@ func c2(taskId string) error {
 		resultError = multierror.Append(resultError, err)
 	}
 
-	c1Out, err := sb.SealCommit2(context.TODO(), task.SectorRef, param0)
+	c2Out, err := sb.SealCommit2(context.TODO(), task.SectorRef, param0)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 		return err
 	}
-	c2OutByte, err := json.Marshal(c1Out)
+	c2OutByte, err := json.Marshal(c2Out)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 		return err
@@ -430,7 +483,7 @@ func c2(taskId string) error {
 	return nil
 }
 
-func fs(taskId string) error {
+func fs(taskId string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -439,6 +492,13 @@ func fs(taskId string) error {
 	}
 
 	defer func() {
+		if r := recover(); r != nil {
+			log.Infof("Recovered in fs: %v", r)
+			wrappedError := fmt.Errorf("recover for error: %w", r)
+			resultError = multierror.Append(resultError, wrappedError)
+			err = wrappedError
+		}
+
 		if resultError != nil {
 			update := bson.M{}
 			update["$set"] = bson.D{

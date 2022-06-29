@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/lotus/my/myModel"
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
+	lock "github.com/square/mongo-lock"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/xerrors"
@@ -194,17 +195,17 @@ func (sc *SchedulerControl) onceGetTask() ([]*myModel.SealingTask, error) {
 }
 
 func (sc *SchedulerControl) onceScheduler() error {
-	//ctx := context.TODO()
-	//err := myMongo.MongoLock.XLock(ctx, "global_lock", myMongo.LockId, lock.LockDetails{})
-	//if err != nil {
-	//	return err
-	//}
-	//defer func() {
-	//	_, err = myMongo.MongoLock.Unlock(ctx, myMongo.LockId)
-	//	if err != nil {
-	//		log.Warn(err)
-	//	}
-	//}()
+	ctx := context.TODO()
+	err := myMongo.MongoLock.XLock(ctx, myMongo.LockResourceName, myMongo.LockId, lock.LockDetails{})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_, err = myMongo.MongoLock.Unlock(ctx, myMongo.LockId)
+		if err != nil {
+			log.Warn(err)
+		}
+	}()
 
 	tasks, err := sc.onceGetTask()
 	if err != nil {
@@ -235,7 +236,7 @@ func (sc *SchedulerControl) onceScheduler() error {
 		case "seal/v0/precommit/2":
 			sc.p2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
 		case "seal/v0/commit/1":
-			sc.c1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			sc.c1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef.ProofType, task.SectorRef)
 		case "seal/v0/commit/2":
 			sc.c2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
 		case "seal/v0/finalize":
@@ -324,7 +325,7 @@ func (sc *SchedulerControl) p2(taskId primitive.ObjectID, taskType string, sid u
 	}
 }
 
-func (sc *SchedulerControl) c1(taskId primitive.ObjectID, taskType string, sid uint64) {
+func (sc *SchedulerControl) c1(taskId primitive.ObjectID, taskType string, sid uint64, rsProof abi.RegisteredSealProof, sectorRef storage.SectorRef) {
 	sc.lk.Lock()
 	defer sc.lk.Unlock()
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
@@ -333,9 +334,10 @@ func (sc *SchedulerControl) c1(taskId primitive.ObjectID, taskType string, sid u
 	}
 	if ok {
 		sc.C1 <- taskReq{
-			ID:       taskId,
-			TaskType: taskType,
-			SectorId: sid,
+			ID:        taskId,
+			TaskType:  taskType,
+			SectorId:  sid,
+			SectorRef: sectorRef,
 		}
 	}
 }
@@ -578,6 +580,46 @@ func migrate(fzReq taskReq) error {
 	}
 	// 2. update sector storage path
 	myMongo.UpdateSectorStatus(fzReq.SectorId, "migrated")
+	return nil
+}
+
+func migrateC1out(sectorRef storage.SectorRef) error {
+	folder := fmt.Sprintf("s-t0%v-%v", sectorRef.ID.Miner, sectorRef.ID.Number)
+
+	ip := myUtils.GetLocalIPv4s()
+	workerMachine, err := myMongo.FindOneMachine(bson.M{
+		"ip":   ip,
+		"role": "worker",
+	})
+	if err != nil {
+		return err
+	}
+	if workerMachine == nil {
+		return xerrors.New("不存在该worker")
+	}
+	storageMachine, err := myMongo.FindOneMachine(bson.M{
+		"role": "tmp_storage",
+	})
+	if workerMachine == nil || storageMachine == nil {
+		return xerrors.New("workerMachine/storageMachine is empty")
+	}
+	p := migration.MigrateParam{
+		SectorID:  folder,
+		FromIP:    ip,
+		FromPath:  workerMachine.WorkerLocalPath,
+		StoreIP:   storageMachine.Ip,
+		StorePath: storageMachine.StoragePath,
+		FtpEnv: migration.FtpEnvStruct{
+			FtpPort:     storageMachine.FtpEnv.FtpPort,
+			FtpUser:     storageMachine.FtpEnv.FtpUser,
+			FtpPassword: storageMachine.FtpEnv.FtpPassword,
+		},
+	}
+	err = migration.MigrateC1Out(&p)
+	if err != nil {
+		fmt.Println("===========================================ftp err:", err)
+		return err
+	}
 	return nil
 }
 

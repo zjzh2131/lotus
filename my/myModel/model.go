@@ -2,9 +2,27 @@ package myModel
 
 import (
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/specs-storage/storage"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+var DelTaskInfo = map[sealtasks.TaskType][]string{
+	sealtasks.TTAddPiece: []string{string(sealtasks.TTAddPiece), string(sealtasks.TTPreCommit1), string(sealtasks.TTPreCommit2),
+		string(sealtasks.TTCommit1), string(sealtasks.TTCommit2), string(sealtasks.TTFinalize)},
+
+	sealtasks.TTPreCommit1: []string{string(sealtasks.TTPreCommit1), string(sealtasks.TTPreCommit2), string(sealtasks.TTCommit1),
+		string(sealtasks.TTCommit2), string(sealtasks.TTFinalize)},
+
+	sealtasks.TTPreCommit2: []string{string(sealtasks.TTPreCommit2), string(sealtasks.TTCommit1), string(sealtasks.TTCommit2),
+		string(sealtasks.TTFinalize)},
+
+	sealtasks.TTCommit1: []string{string(sealtasks.TTCommit1), string(sealtasks.TTCommit2), string(sealtasks.TTFinalize)},
+
+	sealtasks.TTCommit2: []string{string(sealtasks.TTCommit2), string(sealtasks.TTFinalize)},
+
+	sealtasks.TTFinalize: []string{string(sealtasks.TTFinalize)},
+}
 
 type SealingTask struct {
 	ID primitive.ObjectID `json:"id" bson:"_id,omitempty"` // ObjectId

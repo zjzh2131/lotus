@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/lotus/my/myModel"
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
+	lock "github.com/square/mongo-lock"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"os"
@@ -19,7 +20,7 @@ import (
 
 var (
 	MongoHandler *mongo.Database
-	//MongoLock    *lock.Client
+	MongoLock    *lock.Client
 )
 
 const (
@@ -29,20 +30,29 @@ const (
 	Machines        = "machines"
 )
 
+const (
+	LockCollection   = "locks"
+	LockId           = "global_lock"
+	LockResourceName = "global_lock"
+)
+
 func init() {
 	//MongoHandler = InitMongo("mongodb://124.220.208.74:27017", "lotus", 10*time.Second, 100)
 	//MongoHandler = InitMongo("mongodb://192.168.0.22:27017", "lotus", 10*time.Second, 100)
+	//os.Setenv("MONGO_URL", "mongodb://192.168.0.22:27017")
+	os.Setenv("MONGO_URL", "mongodb://124.220.208.74:27017")
 	url := os.Getenv("MONGO_URL")
 	MongoHandler = InitMongo(url, "lotus", 10*time.Second, 100)
 
-	//MongoLock = lock.NewClient(MongoHandler.Collection("locks"))
+	MongoLock = lock.NewClient(MongoHandler.Collection(LockCollection))
 
-	// Create the required and recommended indexes.
-	//err := MongoLock.CreateIndexes(context.TODO())
-	//if err != nil {
-	//	fmt.Println("CreateIndexes err:", err)
-	//	return
-	//}
+	ctx := context.TODO()
+	//Create the required and recommended indexes.
+	err := MongoLock.CreateIndexes(ctx)
+	if err != nil {
+		e := fmt.Sprintf("lock create indexes failed, err:%v\n", err)
+		panic(e)
+	}
 }
 
 func InitMongo(uri, name string, timeout time.Duration, num uint64) *mongo.Database {
@@ -721,4 +731,39 @@ func FindOneMachine(filter interface{}) (*myModel.Machine, error) {
 		return nil, err
 	}
 	return &machines, nil
+}
+
+func count(collectionName string, filter interface{}) (int64, error) {
+	count, err := MongoHandler.Collection(collectionName).CountDocuments(context.TODO(), filter)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func CountTaskBySidStatus(sId uint64, taskType string, nonTaskStatus string) (int64, error) {
+	filter := bson.M{
+		"sector_ref.id.number": sId,
+		"task_type":            taskType,
+		"task_status":          bson.M{"$ne": nonTaskStatus},
+	}
+	return count(SealingTasks, filter)
+}
+
+func DelTasks(sector storage.SectorRef, taskType []string, nonTaskStatus string) error {
+	filter := bson.M{
+		"sector_ref":  sector,
+		"task_status": bson.M{"$ne": nonTaskStatus},
+	}
+
+	orQuery := []bson.M{}
+	for _, v := range taskType {
+		orQuery = append(orQuery, bson.M{"task_type": v})
+	}
+	filter["$or"] = orQuery
+	_, err := MongoHandler.Collection(SealingTasks).DeleteMany(context.TODO(), filter)
+	if err != nil {
+		return err
+	}
+	return nil
 }

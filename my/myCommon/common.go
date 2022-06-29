@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
 	migration "github.com/filecoin-project/lotus/my/migrate"
 	"github.com/filecoin-project/lotus/my/myModel"
@@ -94,7 +95,21 @@ func assignmentOut(task *myModel.SealingTask, out interface{}) (bool, error) {
 		}
 	// SealCommit1
 	case *storage.Commit1Out:
-		err := json.Unmarshal([]byte(task.TaskResult), out.(*storage.Commit1Out))
+		minerMachine, err := myMongo.FindOneMachine(bson.M{
+			"ip":   myUtils.GetLocalIPv4s(),
+			"role": "miner",
+		})
+		tmpStorageMachine, err := myMongo.FindOneMachine(bson.M{
+			"role": "tmp_storage",
+		})
+		folder := fmt.Sprintf("s-t0%v-%v", task.SectorRef.ID.Miner, task.SectorRef.ID.Number)
+		filePath := filepath.Join(minerMachine.MinerMountPath, tmpStorageMachine.Ip, "c1Out", folder, "c1Out")
+		c1OutByte, err := migration.ReadDataFromFile(filePath)
+		if err != nil {
+			return false, err
+		}
+
+		err = json.Unmarshal(c1OutByte, out.(*storage.Commit1Out))
 		if err != nil {
 			return false, err
 		}
@@ -106,7 +121,7 @@ func assignmentOut(task *myModel.SealingTask, out interface{}) (bool, error) {
 		}
 	// FinalizeSector
 	case *myModel.MyFinalizeSectorOut:
-		if task.TaskError != "" {
+		if task.TaskResult == "" {
 			return true, xerrors.New(task.TaskError)
 		}
 	default:
@@ -115,8 +130,30 @@ func assignmentOut(task *myModel.SealingTask, out interface{}) (bool, error) {
 	return true, nil
 }
 
+func PreHandleTask(sector storage.SectorRef, taskType sealtasks.TaskType, taskStatus string) error {
+	// step 1 count document
+	count, err := myMongo.CountTaskBySidStatus(uint64(sector.ID.Number), string(taskType), taskStatus)
+	if err != nil {
+		return err
+	}
+	// step 2 del
+	if count > 0 {
+		delTaskType := myModel.DelTaskInfo[taskType]
+		if len(delTaskType) != 0 {
+			// del
+			err := myMongo.DelTasks(sector, delTaskType, "pending")
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func MountAllStorage() {
-	machines, err := myMongo.FindMachineByRole("storage")
+	machines, err := myMongo.FindMachine(bson.M{
+		"role": bson.M{"$in": []string{"storage", "tmp_storage"}},
+	})
 	if err != nil {
 		return
 	}
@@ -129,7 +166,6 @@ func MountAllStorage() {
 		panic("miner machine info err")
 	}
 	for _, v := range machines {
-		// 	cmd := exec.Command("sudo", "mount", "192.168.0.128:/data/nfs", "/data/mount_nfs1")
 		nfsServer := v.Ip + ":" + v.StoragePath
 		nfsPath := filepath.Join(miner.MinerMountPath, v.Ip)
 		exists, err := myUtils.PathExists(nfsPath)

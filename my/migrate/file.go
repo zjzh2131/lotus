@@ -39,6 +39,21 @@ func WriteDataToFile(filePath string, data []byte) error {
 	return nil
 }
 
+func ReadDataFromFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return []byte{}, fmt.Errorf("open file failed,err: %w", err)
+	}
+	defer f.Close()
+
+	fd, err := ioutil.ReadAll(f)
+	if err != nil {
+		return []byte{}, fmt.Errorf("read all file failed,err: %w", err)
+	}
+
+	return fd, nil
+}
+
 func FetchDataFromFile(filePath string) ([]byte, error) {
 	exists, err := Exists(filePath)
 	if err != nil {
