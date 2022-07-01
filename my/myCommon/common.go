@@ -121,7 +121,7 @@ func assignmentOut(task *myModel.SealingTask, out interface{}) (bool, error) {
 		}
 	// FinalizeSector
 	case *myModel.MyFinalizeSectorOut:
-		if task.TaskResult == "" {
+		if task.TaskResult != "" {
 			return true, xerrors.New(task.TaskError)
 		}
 	default:

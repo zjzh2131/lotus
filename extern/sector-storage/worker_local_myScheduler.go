@@ -153,7 +153,7 @@ func (sc *SchedulerControl) onceGetTask() ([]*myModel.SealingTask, error) {
 	}
 	// new task
 	if needSealing != 0 {
-		s, err := myMongo.GetSmallerSectorId("", "", int64(needSealing))
+		s, err := myMongo.GetSmallerSectorId("", []string{myUtils.GetLocalIPv4s(), ""}, int64(needSealing))
 		if err != nil {
 			return []*myModel.SealingTask{}, err
 		}
@@ -501,7 +501,7 @@ func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
 			myMongo.UpdateStatus(fzReq.ID, "failed")
 			return
 		}
-		myMongo.UpdateSectorStatus(fzReq.SectorId, "living")
+		//myMongo.UpdateSectorStatus(fzReq.SectorId, "living")
 		log.Infof("finalizeSectorCp end: SectorId(%v)\n", fzReq.SectorId)
 
 		log.Infof("migrate start: SectorId(%v)\n", fzReq.SectorId)
@@ -579,7 +579,7 @@ func migrate(fzReq taskReq) error {
 		return err
 	}
 	// 2. update sector storage path
-	myMongo.UpdateSectorStatus(fzReq.SectorId, "migrated")
+	//myMongo.UpdateSectorStatus(fzReq.SectorId, "migrated")
 	return nil
 }
 
@@ -616,6 +616,35 @@ func migrateC1out(sectorRef storage.SectorRef) error {
 		},
 	}
 	err = migration.MigrateC1Out(&p)
+	if err != nil {
+		fmt.Println("===========================================ftp err:", err)
+		return err
+	}
+	return nil
+}
+
+func migrateAddPiece(sectorRef storage.SectorRef, fileName string) error {
+	folder := fmt.Sprintf("s-t0%v-%v", sectorRef.ID.Miner, sectorRef.ID.Number)
+	ip := myUtils.GetLocalIPv4s()
+	minerMachine, err := myMongo.FindOneMachine(bson.M{
+		"ip":   ip,
+		"role": "miner",
+	})
+	if err != nil {
+		return err
+	}
+	if minerMachine == nil {
+		return xerrors.New("不存在该miner")
+	}
+	storageMachine, err := myMongo.FindOneMachine(bson.M{
+		"role": "tmp_storage",
+	})
+	if minerMachine == nil || storageMachine == nil {
+		return xerrors.New("workerMachine/storageMachine is empty")
+	}
+
+	err = migration.MigrateAddPiece(folder, ip, minerMachine.MinerLocalPath, storageMachine.Ip, storageMachine.StoragePath,
+		storageMachine.FtpEnv.FtpPort, storageMachine.FtpEnv.FtpUser, storageMachine.FtpEnv.FtpPassword, fileName)
 	if err != nil {
 		fmt.Println("===========================================ftp err:", err)
 		return err

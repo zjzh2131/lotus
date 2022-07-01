@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 	"github.com/hashicorp/go-multierror"
 	"go.mongodb.org/mongo-driver/bson"
+	"io"
 	"path/filepath"
 	"time"
 )
@@ -151,7 +152,26 @@ func ap(taskId string) (err error) {
 		resultError = multierror.Append(resultError, err)
 	}
 
-	piece, err := sb.AddPiece(context.TODO(), task.SectorRef, param0, abi.UnpaddedPieceSize(size), nullreader.NewNullReader(abi.UnpaddedPieceSize(size)))
+	var r io.Reader
+	if task.TaskPath != "" {
+		workerMachine, err := myMongo.FindOneMachine(bson.M{
+			"ip":   myUtils.GetLocalIPv4s(),
+			"role": "worker",
+		})
+		tmpStorageMachine, err := myMongo.FindOneMachine(bson.M{
+			"role": "tmp_storage",
+		})
+		folder := fmt.Sprintf("s-t0%v-%v", task.SectorRef.ID.Miner, task.SectorRef.ID.Number)
+		filePath := filepath.Join(workerMachine.WorkerMountPath, tmpStorageMachine.Ip, "AddPiece", folder, task.TaskPath)
+		r, err = os.Open(filePath)
+		if err != nil {
+			return fmt.Errorf("open file failed,err: %w", err)
+		}
+	} else {
+		r = nullreader.NewNullReader(abi.UnpaddedPieceSize(size))
+	}
+
+	piece, err := sb.AddPiece(context.TODO(), task.SectorRef, param0, abi.UnpaddedPieceSize(size), r)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 		return err
@@ -374,11 +394,11 @@ func c1(taskId string) (err error) {
 	}
 
 	// TODO
-	//c1OutByte, err := json.Marshal(c1Out)
-	//if err != nil {
-	//	resultError = multierror.Append(resultError, err)
-	//	return err
-	//}
+	c1OutByte, err := json.Marshal(c1Out)
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
 	// step 1 write c1out
 	workerMachine, err := myMongo.FindOneMachine(bson.M{
 		"ip":   myUtils.GetLocalIPv4s(),
@@ -386,13 +406,13 @@ func c1(taskId string) (err error) {
 	})
 	folder := fmt.Sprintf("s-t0%v-%v", task.SectorRef.ID.Miner, task.SectorRef.ID.Number)
 	filePath := filepath.Join(workerMachine.WorkerLocalPath, "c1Out", folder, "c1Out")
-	err = migration.WriteDataToFile(filePath, c1Out)
+	err = migration.WriteDataToFile(filePath, c1OutByte)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 		return err
 	}
 
-	// step ftp migrate
+	// step 2 ftp migrate
 	err = migrateC1out(task.SectorRef)
 	if err != nil {
 		return err

@@ -39,6 +39,7 @@ type SealingTask struct {
 	TaskError      string   `json:"task_error" bson:"task_error"`
 	TaskResult     string   `json:"task_result" bson:"task_result"`
 	TaskStatus     string   `json:"task_status" bson:"task_status"`
+	TaskPath       string   `json:"task_path" bson:"task_path"`
 
 	NodeId    string `json:"node_id" bson:"node_id"`
 	ClusterId string `json:"cluster_id" bson:"cluster_id"`
@@ -107,6 +108,8 @@ type Machine struct {
 	Role string `json:"role" bson:"role"` // lotus/miner/winPost/wdPost/worker/storage
 
 	WorkerLocalPath string `json:"worker_local_storage_path" bson:"worker_local_storage_path"` // worker
+	WorkerMountPath string `json:"worker_mount_path" bson:"worker_mount_path"`                 // worker
+	MinerLocalPath  string `json:"miner_local_storage_path" bson:"miner_local_storage_path"`   // miner
 	MinerMountPath  string `json:"miner_mount_path" bson:"miner_mount_path"`                   // miner
 	StoragePath     string `json:"storage_path" bson:"storage_path"`                           // storage
 

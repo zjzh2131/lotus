@@ -901,3 +901,141 @@ func MigrateC1Out(p *MigrateParam) error {
 
 	return nil
 }
+
+func MigrateDealFile(p *MigrateParam) error {
+	f := &FtpClient{
+		ID:       "",
+		Port:     p.FtpEnv.FtpPort,
+		User:     p.FtpEnv.FtpUser,
+		Password: p.FtpEnv.FtpPassword,
+	}
+	if err := f.ConnectFtpServer(p.StoreIP); err != nil {
+		//SendFailResult(&wg, task, local, err)
+		//continue
+		log.Error("ConnectFtpServer err ", err)
+		return err
+	}
+
+	if p.SectorID == "" {
+		return xerrors.New("SectorID is null err:" + p.SectorID)
+	}
+
+	srcFolder := filepath.Join(p.FromPath, "c1Out", p.SectorID)
+	srcPath := filepath.Join(srcFolder, "c1Out")
+	existed, err := Exists(srcPath)
+	if err != nil {
+		return xerrors.New("check file failed:" + srcPath)
+	}
+	if !existed {
+		return xerrors.New("file not exist:" + srcPath)
+	}
+
+	desPath := filepath.Join(p.StorePath, "c1Out", p.SectorID, "c1Out")
+	err = f.Mkdir_P(desPath)
+	if err != nil {
+		return xerrors.New(desPath + " Mkdir_P err " + err.Error())
+	}
+
+	retries := 1
+	for {
+		err := f.UploadFileWithBreakpoint(srcPath, desPath)
+		if err != nil {
+			log.Errorf("CopyFile [%s] to [%s] failed:[%v]\n", srcPath, desPath, err)
+			retries++
+			if retries > 3 {
+				return xerrors.New("copy 3 times error with " + err.Error())
+			} else {
+				log.Infof("[%s]transfer worker file error:[%s], retry transfer proof [%d]times\n", srcPath, err.Error(), retries)
+				continue
+			}
+		}
+		break
+	}
+
+	log.Info("remove local transfer worker file: ", srcFolder)
+	if err := os.RemoveAll(srcFolder); err != nil {
+		log.Error("RemoveAll failed：" + srcFolder)
+	}
+	log.Infof("migrate worker file with ftp [%s] end", srcFolder)
+
+	return nil
+}
+
+func migrateAddPiece(p *MigrateParam, fileName string) error {
+	f := &FtpClient{
+		ID:       "",
+		Port:     p.FtpEnv.FtpPort,
+		User:     p.FtpEnv.FtpUser,
+		Password: p.FtpEnv.FtpPassword,
+	}
+	if err := f.ConnectFtpServer(p.StoreIP); err != nil {
+		//SendFailResult(&wg, task, local, err)
+		//continue
+		log.Error("ConnectFtpServer err ", err)
+		return err
+	}
+
+	if p.SectorID == "" {
+		return xerrors.New("SectorID is null err:" + p.SectorID)
+	}
+
+	srcFolder := filepath.Join(p.FromPath, "AddPiece", p.SectorID)
+	srcPath := filepath.Join(srcFolder, fileName)
+	existed, err := Exists(srcPath)
+	if err != nil {
+		return xerrors.New("check file failed:" + srcPath)
+	}
+	if !existed {
+		return xerrors.New("file not exist:" + srcPath)
+	}
+
+	desPath := filepath.Join(p.StorePath, "AddPiece", p.SectorID, fileName)
+	err = f.Mkdir_P(desPath)
+	if err != nil {
+		return xerrors.New(desPath + " Mkdir_P err " + err.Error())
+	}
+
+	retries := 1
+	for {
+		err := f.UploadFileWithBreakpoint(srcPath, desPath)
+		if err != nil {
+			log.Errorf("CopyFile [%s] to [%s] failed:[%v]\n", srcPath, desPath, err)
+			retries++
+			if retries > 3 {
+				return xerrors.New("copy 3 times error with " + err.Error())
+			} else {
+				log.Infof("[%s]transfer worker file error:[%s], retry transfer proof [%d]times\n", srcPath, err.Error(), retries)
+				continue
+			}
+		}
+		break
+	}
+
+	log.Info("remove local transfer worker file: ", srcFolder)
+	if err := os.RemoveAll(srcFolder); err != nil {
+		log.Error("RemoveAll failed：" + srcFolder)
+	}
+	log.Infof("migrate worker file with ftp [%s] end", srcFolder)
+
+	return nil
+}
+
+func MigrateAddPiece(sectorId, fromIp, fromPath, storeIp, storePath, ftpPort, ftpUser, ftpPassword, fileName string) error {
+	p := MigrateParam{
+		SectorID:  sectorId,
+		FromIP:    fromIp,
+		FromPath:  fromPath,
+		StoreIP:   storeIp,
+		StorePath: storePath,
+		FtpEnv: FtpEnvStruct{
+			FtpPort:     ftpPort,
+			FtpUser:     ftpUser,
+			FtpPassword: ftpPassword,
+		},
+	}
+	err := migrateAddPiece(&p, fileName)
+	if err != nil {
+		return err
+	}
+	return nil
+}

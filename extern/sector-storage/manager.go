@@ -9,6 +9,7 @@ import (
 	migration "github.com/filecoin-project/lotus/my/migrate"
 	"github.com/filecoin-project/lotus/my/myCommon"
 	"github.com/filecoin-project/lotus/my/myModel"
+	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
 	cid "github.com/ipfs/go-cid"
@@ -19,6 +20,7 @@ import (
 	"golang.org/x/xerrors"
 	"io"
 	"net/http"
+	"path/filepath"
 	"sync"
 
 	"github.com/filecoin-project/go-state-types/abi"
@@ -393,46 +395,75 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	//	}
 	//	return nil
 	//})
-
 	var err error
+
 	err = myCommon.PreHandleTask(sector, sealtasks.TTAddPiece, "pending")
 	if err != nil {
 		return abi.PieceInfo{}, err
 	}
 
-	s, _ := myMongo.FindSectorsBySid(uint64(sector.ID.Number))
-	if s != nil {
-		// more times
-		err := myMongo.Transaction(func() error {
-			err := myMongo.DelTask(sector, string(sealtasks.TTAddPiece), "finish")
-			if err != nil {
-				return err
-			}
-			err = myMongo.InitTask(sector, string(sealtasks.TTAddPiece), "pending", []interface{}{existingPieces, sz}...)
-			if err != nil {
-				return err
-			}
-			return nil
-		})
+	{
+		var snowId string
+		all, err := io.ReadAll(r)
 		if err != nil {
 			return abi.PieceInfo{}, err
 		}
-	} else {
-		// first times
-		err := myMongo.Transaction(func() error {
-			err = myMongo.InitSector(sector, "CC", "")
-			if err != nil {
-				return err
-			}
-
-			err = myMongo.InitTask(sector, string(sealtasks.TTAddPiece), "pending", []interface{}{existingPieces, sz}...)
-			if err != nil {
-				return err
-			}
-			return nil
-		})
+		isZero, err := myUtils.ReaderIsZero(all)
 		if err != nil {
 			return abi.PieceInfo{}, err
+		}
+		if !isZero {
+			// step 1 gen snow id
+			snowId = myUtils.GenSnowIDStr()
+			// step 2 write ap
+			minerMachine, err := myMongo.FindOneMachine(bson.M{
+				"ip":   myUtils.GetLocalIPv4s(),
+				"role": "miner",
+			})
+			folder := fmt.Sprintf("s-t0%v-%v", sector.ID.Miner, sector.ID.Number)
+			filePath := filepath.Join(minerMachine.MinerLocalPath, "AddPiece", folder, snowId)
+			err = migration.WriteDataToFile(filePath, all)
+			if err != nil {
+				return abi.PieceInfo{}, err
+			}
+			// step 3 ftp migrate
+			err = migrateAddPiece(sector, snowId)
+		}
+
+		s, _ := myMongo.FindSectorsBySid(uint64(sector.ID.Number))
+		if s != nil {
+			// more times
+			err := myMongo.Transaction(func() error {
+				err := myMongo.DelTask(sector, string(sealtasks.TTAddPiece), "finish")
+				if err != nil {
+					return err
+				}
+				err = myMongo.InitTask(sector, string(sealtasks.TTAddPiece), "pending", snowId, []interface{}{existingPieces, sz}...)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
+			if err != nil {
+				return abi.PieceInfo{}, err
+			}
+		} else {
+			// first times
+			err := myMongo.Transaction(func() error {
+				err = myMongo.InitSector(sector, "CC", "")
+				if err != nil {
+					return err
+				}
+
+				err = myMongo.InitTask(sector, string(sealtasks.TTAddPiece), "pending", snowId, []interface{}{existingPieces, sz}...)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
+			if err != nil {
+				return abi.PieceInfo{}, err
+			}
 		}
 	}
 
@@ -500,7 +531,7 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 		return out, err
 	}
 
-	err = myMongo.InitTask(sector, string(sealtasks.TTPreCommit1), "pending", []interface{}{ticket, pieces}...)
+	err = myMongo.InitTask(sector, string(sealtasks.TTPreCommit1), "pending", "", []interface{}{ticket, pieces}...)
 	if err != nil {
 		fmt.Println(err)
 		return out, err
@@ -567,7 +598,7 @@ func (m *Manager) SealPreCommit2(ctx context.Context, sector storage.SectorRef, 
 		return out, err
 	}
 
-	err = myMongo.InitTask(sector, string(sealtasks.TTPreCommit2), "pending", []interface{}{phase1Out}...)
+	err = myMongo.InitTask(sector, string(sealtasks.TTPreCommit2), "pending", "", []interface{}{phase1Out}...)
 	if err != nil {
 		fmt.Println(err)
 		return out, err
@@ -637,7 +668,7 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 		return out, err
 	}
 
-	err = myMongo.InitTask(sector, string(sealtasks.TTCommit1), "pending", []interface{}{ticket, seed, pieces, cids}...)
+	err = myMongo.InitTask(sector, string(sealtasks.TTCommit1), "pending", "", []interface{}{ticket, seed, pieces, cids}...)
 	if err != nil {
 		return out, err
 	}
@@ -697,7 +728,7 @@ func (m *Manager) SealCommit2(ctx context.Context, sector storage.SectorRef, pha
 		return out, err
 	}
 
-	err = myMongo.InitTask(sector, string(sealtasks.TTCommit2), "pending", []interface{}{phase1Out}...)
+	err = myMongo.InitTask(sector, string(sealtasks.TTCommit2), "pending", "", []interface{}{phase1Out}...)
 	if err != nil {
 		return out, err
 	}
@@ -796,7 +827,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	}
 
 	myMongo.Transaction(func() error {
-		err = myMongo.InitTask(sector, string(sealtasks.TTFinalize), "pending", []interface{}{keepUnsealed}...)
+		err = myMongo.InitTask(sector, string(sealtasks.TTFinalize), "pending", "", []interface{}{keepUnsealed}...)
 		if err != nil {
 			return err
 		}
@@ -839,7 +870,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	if err != nil {
 		return err
 	}
-
+	myMongo.UpdateSectorStatus(uint64(sector.ID.Number), "living")
 	// // TODO go migrate()
 	return nil
 }

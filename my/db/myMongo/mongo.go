@@ -223,7 +223,7 @@ func UpdateTaskResStatus(objId primitive.ObjectID, state, res string) error {
 	return nil
 }
 
-func InitTask(sector storage.SectorRef, taskType string, taskStatus string, taskParameters ...interface{}) error {
+func InitTask(sector storage.SectorRef, taskType string, taskStatus string, taskPath string, taskParameters ...interface{}) error {
 	task := myModel.SealingTask{
 		SectorRef:      sector,
 		TaskParameters: []string{},
@@ -231,6 +231,7 @@ func InitTask(sector storage.SectorRef, taskType string, taskStatus string, task
 		TaskError:      "",
 		TaskResult:     "",
 		TaskStatus:     taskStatus,
+		TaskPath:       taskPath,
 
 		WorkerIp:   "",
 		WorkerPath: "",
@@ -596,12 +597,18 @@ func GetSuitableTask(sids []uint64, taskTypes []string, taskStatus string, need 
 	return tasks, nil
 }
 
-func GetSmallerSectorId(sectorStatus, workerIp string, need int64) ([]uint64, error) {
+func GetSmallerSectorId(sectorStatus string, workerIp []string, need int64) ([]uint64, error) {
 	var out []uint64
 	filter := bson.M{
-		"worker_ip":     workerIp,
+		//"worker_ip":     workerIp,
 		"sector_status": sectorStatus,
 	}
+
+	orQuery := []bson.M{}
+	for _, v := range workerIp {
+		orQuery = append(orQuery, bson.M{"worker_ip": v})
+	}
+	filter["$or"] = orQuery
 
 	findOptions := &options.FindOptions{}
 	// 排序

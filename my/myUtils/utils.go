@@ -111,3 +111,11 @@ func PathExists(path string) (bool, error) {
 	}
 	return false, err
 }
+
+func ReaderIsZero(all []byte) (bool, error) {
+	s := strings.Trim(string(all), string([]byte{0}))
+	if len(s) != 0 {
+		return false, nil
+	}
+	return true, nil
+}
