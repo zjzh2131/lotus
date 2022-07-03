@@ -684,6 +684,11 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 	err = myCommon.WaitResult(wg, uint64(sector.ID.Number), string(sealtasks.TTCommit1), []string{"done", "failed"}, &out)
 	wg.Wait()
 	if err != nil {
+		in := myModel.SealingTask{
+			TaskType:  "miner",
+			TaskError: err.Error(),
+		}
+		myMongo.Insert("sealing_tasks", &in)
 		return out, err
 	}
 
