@@ -73,7 +73,13 @@ func WaitResult(wg *sync.WaitGroup, sectorId uint64, taskType string, taskStatus
 	}
 }
 
-func assignmentOut(task *myModel.SealingTask, out interface{}) (bool, error) {
+func assignmentOut(task *myModel.SealingTask, out interface{}) (ok bool, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			wrappedError := fmt.Errorf("recover for error: %w", r)
+			err = wrappedError
+		}
+	}()
 	switch out.(type) {
 	// AddPiece
 	case *abi.PieceInfo:
