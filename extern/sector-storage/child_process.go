@@ -360,6 +360,10 @@ func c1(taskId string) (err error) {
 				bson.E{Key: "task_error", Value: resultError.Error()},
 			}
 			myMongo.UpdateTask(bson.M{"_id": task.ID}, update)
+			in := myModel.SealingTask{
+				TaskError: resultError.Error(),
+			}
+			myMongo.Insert("sealing_tasks", &in)
 		}
 	}()
 
