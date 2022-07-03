@@ -614,6 +614,7 @@ func (m *Manager) SealPreCommit2(ctx context.Context, sector storage.SectorRef, 
 			TaskError: err.Error(),
 		}
 		myMongo.Insert("sealing_tasks", &in)
+		fmt.Println(err)
 		return out, err
 	}
 
