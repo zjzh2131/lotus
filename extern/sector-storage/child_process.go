@@ -471,7 +471,24 @@ func c2(taskId string) (err error) {
 	}
 
 	var param0 storage.Commit1Out
-	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	//err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
+	//resultError = multierror.Append(resultError, err)
+
+	workerMachine, err := myMongo.FindOneMachine(bson.M{
+		"ip":   myUtils.GetLocalIPv4s(),
+		"role": "worker",
+	})
+	tmpStorageMachine, err := myMongo.FindOneMachine(bson.M{
+		"role": "tmp_storage",
+	})
+	folder := fmt.Sprintf("s-t0%v-%v", task.SectorRef.ID.Miner, task.SectorRef.ID.Number)
+	filePath := filepath.Join(workerMachine.WorkerMountPath, tmpStorageMachine.Ip, "c1Out", folder, "c1Out")
+	c1OutByte, err := migration.ReadDataFromFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(c1OutByte, &param0)
 	resultError = multierror.Append(resultError, err)
 
 	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
@@ -490,24 +507,25 @@ func c2(taskId string) (err error) {
 		resultError = multierror.Append(resultError, err)
 		return err
 	}
-	// step 1 write c1out
-	workerMachine, err := myMongo.FindOneMachine(bson.M{
-		"ip":   myUtils.GetLocalIPv4s(),
-		"role": "worker",
-	})
-	folder := fmt.Sprintf("s-t0%v-%v", task.SectorRef.ID.Miner, task.SectorRef.ID.Number)
-	filePath := filepath.Join(workerMachine.WorkerLocalPath, "c2Out", folder, "c2Out")
-	err = migration.WriteDataToFile(filePath, c2OutByte)
-	if err != nil {
-		resultError = multierror.Append(resultError, err)
-		return err
-	}
 
-	// step 2 ftp migrate
-	err = migrateC2out(task.SectorRef)
-	if err != nil {
-		return err
-	}
+	//// step 1 write c1out
+	//workerMachine, err := myMongo.FindOneMachine(bson.M{
+	//	"ip":   myUtils.GetLocalIPv4s(),
+	//	"role": "worker",
+	//})
+	//folder := fmt.Sprintf("s-t0%v-%v", task.SectorRef.ID.Miner, task.SectorRef.ID.Number)
+	//filePath := filepath.Join(workerMachine.WorkerLocalPath, "c2Out", folder, "c2Out")
+	//err = migration.WriteDataToFile(filePath, c2OutByte)
+	//if err != nil {
+	//	resultError = multierror.Append(resultError, err)
+	//	return err
+	//}
+	//
+	//// step 2 ftp migrate
+	//err = migrateC2out(task.SectorRef)
+	//if err != nil {
+	//	return err
+	//}
 
 	err = myMongo.UpdateTaskLog(logId, bson.M{
 		"$set": bson.D{
@@ -518,7 +536,7 @@ func c2(taskId string) (err error) {
 	})
 	resultError = multierror.Append(resultError, err)
 
-	err = myMongo.UpdateTaskResStatus(task.ID, "done", "")
+	err = myMongo.UpdateTaskResStatus(task.ID, "done", string(c2OutByte))
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 		return err

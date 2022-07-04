@@ -121,21 +121,7 @@ func assignmentOut(task *myModel.SealingTask, out interface{}) (ok bool, err err
 		}
 	// SealCommit2
 	case *storage.Proof:
-		minerMachine, err := myMongo.FindOneMachine(bson.M{
-			"ip":   myUtils.GetLocalIPv4s(),
-			"role": "miner",
-		})
-		tmpStorageMachine, err := myMongo.FindOneMachine(bson.M{
-			"role": "tmp_storage",
-		})
-		folder := fmt.Sprintf("s-t0%v-%v", task.SectorRef.ID.Miner, task.SectorRef.ID.Number)
-		filePath := filepath.Join(minerMachine.MinerMountPath, tmpStorageMachine.Ip, "c2Out", folder, "c2Out")
-		c2OutByte, err := migration.ReadDataFromFile(filePath)
-		if err != nil {
-			return false, err
-		}
-
-		err = json.Unmarshal(c2OutByte, out.(*storage.Proof))
+		err = json.Unmarshal([]byte(task.TaskResult), out.(*storage.Proof))
 		if err != nil {
 			return false, err
 		}

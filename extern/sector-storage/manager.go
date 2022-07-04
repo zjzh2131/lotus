@@ -739,7 +739,7 @@ func (m *Manager) SealCommit2(ctx context.Context, sector storage.SectorRef, pha
 		return out, err
 	}
 
-	err = myMongo.InitTask(sector, string(sealtasks.TTCommit2), "pending", "", []interface{}{phase1Out}...)
+	err = myMongo.InitTask(sector, string(sealtasks.TTCommit2), "pending", "", []interface{}{}...)
 	if err != nil {
 		return out, err
 	}
