@@ -623,6 +623,46 @@ func migrateC1out(sectorRef storage.SectorRef) error {
 	return nil
 }
 
+func migrateC2out(sectorRef storage.SectorRef) error {
+	folder := fmt.Sprintf("s-t0%v-%v", sectorRef.ID.Miner, sectorRef.ID.Number)
+
+	ip := myUtils.GetLocalIPv4s()
+	workerMachine, err := myMongo.FindOneMachine(bson.M{
+		"ip":   ip,
+		"role": "worker",
+	})
+	if err != nil {
+		return err
+	}
+	if workerMachine == nil {
+		return xerrors.New("不存在该worker")
+	}
+	storageMachine, err := myMongo.FindOneMachine(bson.M{
+		"role": "tmp_storage",
+	})
+	if workerMachine == nil || storageMachine == nil {
+		return xerrors.New("workerMachine/storageMachine is empty")
+	}
+	p := migration.MigrateParam{
+		SectorID:  folder,
+		FromIP:    ip,
+		FromPath:  workerMachine.WorkerLocalPath,
+		StoreIP:   storageMachine.Ip,
+		StorePath: storageMachine.StoragePath,
+		FtpEnv: migration.FtpEnvStruct{
+			FtpPort:     storageMachine.FtpEnv.FtpPort,
+			FtpUser:     storageMachine.FtpEnv.FtpUser,
+			FtpPassword: storageMachine.FtpEnv.FtpPassword,
+		},
+	}
+	err = migration.MigrateC2Out(&p)
+	if err != nil {
+		fmt.Println("===========================================ftp err:", err)
+		return err
+	}
+	return nil
+}
+
 func migrateAddPiece(sectorRef storage.SectorRef, fileName string) error {
 	folder := fmt.Sprintf("s-t0%v-%v", sectorRef.ID.Miner, sectorRef.ID.Number)
 	ip := myUtils.GetLocalIPv4s()

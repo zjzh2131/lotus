@@ -484,9 +484,28 @@ func c2(taskId string) (err error) {
 		resultError = multierror.Append(resultError, err)
 		return err
 	}
+
 	c2OutByte, err := json.Marshal(c2Out)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
+		return err
+	}
+	// step 1 write c1out
+	workerMachine, err := myMongo.FindOneMachine(bson.M{
+		"ip":   myUtils.GetLocalIPv4s(),
+		"role": "worker",
+	})
+	folder := fmt.Sprintf("s-t0%v-%v", task.SectorRef.ID.Miner, task.SectorRef.ID.Number)
+	filePath := filepath.Join(workerMachine.WorkerLocalPath, "c2Out", folder, "c2Out")
+	err = migration.WriteDataToFile(filePath, c2OutByte)
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
+
+	// step 2 ftp migrate
+	err = migrateC2out(task.SectorRef)
+	if err != nil {
 		return err
 	}
 
@@ -499,7 +518,7 @@ func c2(taskId string) (err error) {
 	})
 	resultError = multierror.Append(resultError, err)
 
-	err = myMongo.UpdateTaskResStatus(task.ID, "done", string(c2OutByte))
+	err = myMongo.UpdateTaskResStatus(task.ID, "done", "")
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 		return err
