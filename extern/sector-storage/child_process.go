@@ -360,10 +360,6 @@ func c1(taskId string) (err error) {
 				bson.E{Key: "task_error", Value: resultError.Error()},
 			}
 			myMongo.UpdateTask(bson.M{"_id": task.ID}, update)
-			in := myModel.SealingTask{
-				TaskError: resultError.Error(),
-			}
-			myMongo.Insert("sealing_tasks", &in)
 		}
 	}()
 
@@ -593,6 +589,15 @@ func fs(taskId string) (err error) {
 		}
 		return nil
 	}
+
+	log.Infof("migrate start: SectorId(%v)\n", task.SectorRef.ID.Number)
+	err = migrate(task.SectorRef)
+	if err != nil {
+		fmt.Println("migrate err:", err)
+		myMongo.UpdateStatus(task.ID, "failed")
+		return
+	}
+	log.Infof("migrate end: SectorId(%v)\n", task.SectorRef.ID.Number)
 
 	err = myMongo.UpdateTaskLog(logId, bson.M{
 		"$set": bson.D{

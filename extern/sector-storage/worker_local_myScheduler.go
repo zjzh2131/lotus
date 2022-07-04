@@ -504,14 +504,14 @@ func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
 		//myMongo.UpdateSectorStatus(fzReq.SectorId, "living")
 		log.Infof("finalizeSectorCp end: SectorId(%v)\n", fzReq.SectorId)
 
-		log.Infof("migrate start: SectorId(%v)\n", fzReq.SectorId)
-		err = migrate(fzReq)
-		if err != nil {
-			fmt.Println("migrate err:", err)
-			myMongo.UpdateStatus(fzReq.ID, "failed")
-			return
-		}
-		log.Infof("migrate end: SectorId(%v)\n", fzReq.SectorId)
+		//log.Infof("migrate start: SectorId(%v)\n", fzReq.SectorId)
+		//err = migrate(fzReq)
+		//if err != nil {
+		//	fmt.Println("migrate err:", err)
+		//	myMongo.UpdateStatus(fzReq.ID, "failed")
+		//	return
+		//}
+		//log.Infof("migrate end: SectorId(%v)\n", fzReq.SectorId)
 	}()
 }
 
@@ -536,13 +536,13 @@ func (sc *SchedulerControl) String() string {
 	return sealingMStr + sealingStr + apP1Str + p2c2Str + aPStr + p1Str + p2Str + c1Str + c2Str + fzStr
 }
 
-func migrate(fzReq taskReq) error {
+func migrate(sector storage.SectorRef) error {
 	// TODO ftp migrate
-	sid, err := myMongo.FindSectorsBySid(fzReq.SectorId)
+	sid, err := myMongo.FindSectorsBySid(uint64(sector.ID.Number))
 	if err != nil {
 		return err
 	}
-	folder := fmt.Sprintf("s-t0%v-%v", fzReq.SectorRef.ID.Miner, fzReq.SectorRef.ID.Number)
+	folder := fmt.Sprintf("s-t0%v-%v", sector.ID.Miner, sector.ID.Number)
 	ip := myUtils.GetLocalIPv4s()
 	workerMachine, err := myMongo.FindOneMachine(bson.M{
 		"ip":   ip,
@@ -573,7 +573,7 @@ func migrate(fzReq taskReq) error {
 			FtpPassword: storageMachine.FtpEnv.FtpPassword,
 		},
 	}
-	err = migration.MigrateWithFtp(p, fzReq.RSProof)
+	err = migration.MigrateWithFtp(p, sector.ProofType)
 	if err != nil {
 		fmt.Println("===========================================ftp err:", err)
 		return err

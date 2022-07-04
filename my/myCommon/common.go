@@ -48,7 +48,7 @@ func WaitResult(wg *sync.WaitGroup, sectorId uint64, taskType string, taskStatus
 					}
 					fmt.Println("[=====================================CancelStoreMachine Success=====================================]")
 				}
-				e := fmt.Sprintf("child process run task failed, ObjId: [%v], taskType: [%v]", task.ID, task.TaskType)
+				e := fmt.Sprintf("child process run task failed, ObjId: [%v], taskType: [%v], taskError: [%v]", task.ID, task.TaskType, task.TaskError)
 				return xerrors.New(e)
 			}
 			if task.TaskType == "seal/v0/finalize" {
