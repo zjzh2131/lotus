@@ -2,6 +2,7 @@ package sectorstorage
 
 import (
 	"context"
+	"github.com/filecoin-project/lotus/my/myModel"
 	"sync"
 	"time"
 
@@ -178,8 +179,30 @@ func newScheduler(assigner string) (*Scheduler, error) {
 
 func (sh *Scheduler) Schedule(ctx context.Context, sector storage.SectorRef, taskType sealtasks.TaskType, sel WorkerSelector, prepare WorkerAction, work WorkerAction) error {
 	ret := make(chan workerResponse)
+	if _, ok := myModel.CodeChangesTask[taskType]; !ok {
+		select {
+		case sh.schedule <- &WorkerRequest{
+			Sector:   sector,
+			TaskType: taskType,
+			Priority: getPriority(ctx),
+			Sel:      sel,
 
-	select {
+			prepare: prepare,
+			work:    work,
+
+			start: time.Now(),
+
+			ret: ret,
+			Ctx: ctx,
+		}:
+		case <-sh.closing:
+			return xerrors.New("closing")
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+	}
+	//select {
 	//case sh.schedule <- &WorkerRequest{
 	//	Sector:   sector,
 	//	TaskType: taskType,
@@ -194,12 +217,12 @@ func (sh *Scheduler) Schedule(ctx context.Context, sector storage.SectorRef, tas
 	//	ret: ret,
 	//	Ctx: ctx,
 	//}:
-	case <-sh.closing:
-		return xerrors.New("closing")
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
+	//case <-sh.closing:
+	//	return xerrors.New("closing")
+	//case <-ctx.Done():
+	//	return ctx.Err()
+	//default:
+	//}
 
 	select {
 	case resp := <-ret:

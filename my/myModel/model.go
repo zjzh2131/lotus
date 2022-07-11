@@ -24,6 +24,15 @@ var DelTaskInfo = map[sealtasks.TaskType][]string{
 	sealtasks.TTFinalize: []string{string(sealtasks.TTFinalize)},
 }
 
+var CodeChangesTask = map[sealtasks.TaskType]struct{}{
+	sealtasks.TTAddPiece:   {},
+	sealtasks.TTPreCommit1: {},
+	sealtasks.TTPreCommit2: {},
+	sealtasks.TTCommit1:    {},
+	sealtasks.TTCommit2:    {},
+	sealtasks.TTFinalize:   {},
+}
+
 type SealingTask struct {
 	ID primitive.ObjectID `json:"id" bson:"_id,omitempty"` // ObjectId
 
@@ -40,6 +49,9 @@ type SealingTask struct {
 	TaskResult     string   `json:"task_result" bson:"task_result"`
 	TaskStatus     string   `json:"task_status" bson:"task_status"`
 	TaskPath       string   `json:"task_path" bson:"task_path"`
+
+	NUMANode uint64 `json:"numa_node" bson:"numa_node"`
+	NUMACpu  uint64 `json:"numa_cpu" bson:"numa_cpu"`
 
 	NodeId    string `json:"node_id" bson:"node_id"`
 	ClusterId string `json:"cluster_id" bson:"cluster_id"`
@@ -102,8 +114,8 @@ type Machine struct {
 	ID primitive.ObjectID `json:"id" bson:"_id,omitempty"` // ObjectId
 
 	Ip           string        `json:"ip" bson:"ip"`
-	HardwareInfo *hardwareInfo `json:"hardware_info" bson:"hardware_info"`
-	ControlInfo  *controlInfo  `json:"control_info" bson:"control_info"`
+	HardwareInfo *HardwareInfo `json:"hardware_info" bson:"hardware_info"`
+	ControlInfo  *ControlInfo  `json:"control_info" bson:"control_info"`
 
 	Role string `json:"role" bson:"role"` // lotus/miner/winPost/wdPost/worker/storage
 
@@ -129,10 +141,18 @@ type Machine struct {
 	UpdatedBy string `json:"updated_by" bson:"updated_by"`
 }
 
-type hardwareInfo struct {
+type HardwareInfo struct {
+	NUMASet []*NUMANode `json:"numa_set" bson:"numa_set"`
 }
 
-type controlInfo struct {
+type ControlInfo struct {
+}
+
+type NUMANode struct {
+	NodeID    uint64   `json:"node_id" bson:"node_id"`
+	Cpus      []uint64 `json:"cpus" bson:"cpus"`
+	TotalSize uint64   `json:"total_size" bson:"total_size"`
+	P1Count   uint64   `json:"p1_count" bson:"p1_count"`
 }
 
 type FtpEnv struct {

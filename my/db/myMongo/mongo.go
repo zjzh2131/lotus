@@ -774,3 +774,53 @@ func DelTasks(sector storage.SectorRef, taskType []string, nonTaskStatus string)
 	}
 	return nil
 }
+
+func GetSectorIdsBtWorkerIp() ([]uint64, error) {
+	var out []uint64
+	filter := bson.M{
+		"worker_ip": myUtils.GetLocalIPv4s(),
+	}
+
+	findOptions := &options.FindOptions{}
+	// 排序
+	sortM := map[string]interface{}{}
+	sortM["created_at"] = 1
+	findOptions.Sort = sortM
+	findOptions.SetProjection(bson.D{
+		{"_id", 0},
+		{"sector_id", 1},
+	})
+	findResults, err := MongoHandler.Collection(Sectors).Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err := findResults.Close(context.TODO())
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+	for findResults.Next(context.TODO()) {
+		var s sid
+		err := findResults.Decode(&s)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s.ID)
+	}
+	return out, nil
+}
+
+func CountRunningNUMANode(node uint64, taskType, taskStatus string) (int64, error) {
+	sids, err := GetSectorIdsBtWorkerIp()
+	if err != nil {
+		return 0, err
+	}
+	filter := bson.M{
+		"task_type":            taskType,
+		"task_status":          taskStatus,
+		"sector_ref.id.number": bson.M{"$in": sids},
+		"numa_node":            node,
+	}
+	return count(SealingTasks, filter)
+}
