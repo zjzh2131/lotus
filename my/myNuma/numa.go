@@ -4,7 +4,6 @@ package myNuma
 //
 // #include <numa.h>
 import "C"
-import "unsafe"
 
 // IsAvailable returns true if NUMA is
 // available.
@@ -63,8 +62,8 @@ type NodeMask C.nodemask_t
 
 // NumaBind equal numa_bind()
 func NumaBind(node int) {
-	maskP := (*C.nodemask_t)((unsafe.Pointer)(new(NodeMask)))
+	maskP := new(C.nodemask_t)
 	C.nodemask_zero(maskP)
 	C.nodemask_set_compat(maskP, 1)
-	C.numa_bind(maskP)
+	C.numa_bind_compat(maskP)
 }
