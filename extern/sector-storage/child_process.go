@@ -2,15 +2,20 @@ package sectorstorage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 	migration "github.com/filecoin-project/lotus/my/migrate"
+	"github.com/filecoin-project/lotus/my/myNuma"
+	"github.com/filecoin-project/lotus/my/myReexec"
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"github.com/filecoin-project/specs-storage/storage"
 	"github.com/hashicorp/go-multierror"
 	"go.mongodb.org/mongo-driver/bson"
 	"io"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -22,76 +27,162 @@ import (
 	"github.com/filecoin-project/lotus/extern/storage-sealing/lib/nullreader"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
 	"github.com/filecoin-project/lotus/my/myModel"
-	"github.com/filecoin-project/lotus/my/myReexec"
 	"os"
 	"strconv"
 )
 
+var tasksCaller = map[string]func(string, string, string) error{
+	"seal/v0/addpiece":    ap,
+	"seal/v0/precommit/1": p1,
+	"seal/v0/precommit/2": p2,
+	"seal/v0/commit/1":    c1,
+	"seal/v0/commit/2":    c2,
+	"seal/v0/finalize":    fs,
+}
+
+type applicationResource struct {
+	cpuCount int
+}
+
+var tasksNeedNumaResource = map[string]applicationResource{
+	"seal/v0/addpiece": {
+		cpuCount: 1,
+	},
+	"seal/v0/precommit/1": {
+		cpuCount: 2,
+	},
+	"seal/v0/precommit/2": {
+		cpuCount: 1,
+	},
+	"seal/v0/commit/1": {
+		cpuCount: 1,
+	},
+	"seal/v0/commit/2": {
+		cpuCount: 1,
+	},
+	"seal/v0/finalize": {
+		cpuCount: 1,
+	},
+}
+
 func init() {
-	myReexec.Register("seal/v0/addpiece", func() error {
-		log.Infof("ap child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-		var err error
-		taskId := os.Args[1]
-		err = ap(taskId)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	myReexec.Register("seal/v0/precommit/1", func() error {
-		log.Infof("p1 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-		var err error
-		taskId := os.Args[1]
-		err = p1(taskId)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	myReexec.Register("seal/v0/precommit/2", func() error {
-		log.Infof("p2 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-		var err error
-		taskId := os.Args[1]
-		err = p2(taskId)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	myReexec.Register("seal/v0/commit/1", func() error {
-		log.Infof("c1 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-		var err error
-		taskId := os.Args[1]
-		err = c1(taskId)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	myReexec.Register("seal/v0/commit/2", func() error {
-		log.Infof("c2 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-		var err error
-		taskId := os.Args[1]
-		err = c2(taskId)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	myReexec.Register("seal/v0/finalize", func() error {
-		log.Infof("fz child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-		var err error
-		taskId := os.Args[1]
-		err = fs(taskId)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
+	myReexec.Register("seal/v0/addpiece", register)
+	myReexec.Register("seal/v0/precommit/1", register)
+	myReexec.Register("seal/v0/precommit/2", register)
+	myReexec.Register("seal/v0/commit/1", register)
+	myReexec.Register("seal/v0/commit/2", register)
+	myReexec.Register("seal/v0/finalize", register)
 	if myReexec.Init() {
 		os.Exit(0)
 	}
 }
+
+func register() error {
+	log.Infof("child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+	task := taskReq{
+		TaskType: os.Args[0],
+	}
+	bound, freed, ok := rs.GetNuma(task, tasksNeedNumaResource[os.Args[0]].cpuCount)
+	if ok {
+		defer freed()
+		var cpusStr []string
+		for _, v := range bound.cpus {
+			cpusStr = append(cpusStr, strconv.Itoa(v))
+		}
+		err := boundCpu(strings.Join(cpusStr, ","), strconv.Itoa(os.Getpid()))
+		if err != nil {
+			return errors.New("bound cpu error")
+		}
+		myNuma.SetPreferred(bound.nodeId)
+	}
+
+	// call
+	if call, ok := tasksCaller[os.Args[0]]; ok {
+		err := call(os.Args[1], fmt.Sprintf("%v", bound.cpus), strconv.Itoa(bound.nodeId))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func boundCpu(cpus, pid string) error {
+	//taskset -pc 0,2 11498
+	cmd := exec.Command("taskset", "-pc", cpus, pid)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//func init() {
+//	myReexec.Register("seal/v0/addpiece", func() error {
+//		log.Infof("ap child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+//		var err error
+//		taskId := os.Args[1]
+//		err = ap(taskId)
+//		if err != nil {
+//			return err
+//		}
+//		return nil
+//	})
+//	myReexec.Register("seal/v0/precommit/1", func() error {
+//		log.Infof("p1 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+//		var err error
+//		taskId := os.Args[1]
+//		err = p1(taskId)
+//		if err != nil {
+//			return err
+//		}
+//		return nil
+//	})
+//	myReexec.Register("seal/v0/precommit/2", func() error {
+//		log.Infof("p2 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+//		var err error
+//		taskId := os.Args[1]
+//		err = p2(taskId)
+//		if err != nil {
+//			return err
+//		}
+//		return nil
+//	})
+//	myReexec.Register("seal/v0/commit/1", func() error {
+//		log.Infof("c1 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+//		var err error
+//		taskId := os.Args[1]
+//		err = c1(taskId)
+//		if err != nil {
+//			return err
+//		}
+//		return nil
+//	})
+//	myReexec.Register("seal/v0/commit/2", func() error {
+//		log.Infof("c2 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+//		var err error
+//		taskId := os.Args[1]
+//		err = c2(taskId)
+//		if err != nil {
+//			return err
+//		}
+//		return nil
+//	})
+//	myReexec.Register("seal/v0/finalize", func() error {
+//		log.Infof("fz child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
+//		var err error
+//		taskId := os.Args[1]
+//		err = fs(taskId)
+//		if err != nil {
+//			return err
+//		}
+//		return nil
+//	})
+//	if myReexec.Init() {
+//		os.Exit(0)
+//	}
+//}
 
 func callChildProcess(args []string) error {
 	cmd := reexec.Command(args...)
@@ -104,7 +195,7 @@ func callChildProcess(args []string) error {
 	return nil
 }
 
-func ap(taskId string) (err error) {
+func ap(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -147,7 +238,7 @@ func ap(taskId string) (err error) {
 		return err
 	}
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
@@ -200,7 +291,7 @@ func ap(taskId string) (err error) {
 	return nil
 }
 
-func p1(taskId string) (err error) {
+func p1(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -238,7 +329,7 @@ func p1(taskId string) (err error) {
 	err = json.Unmarshal([]byte(task.TaskParameters[1]), &param1)
 	resultError = multierror.Append(resultError, err)
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
@@ -270,7 +361,7 @@ func p1(taskId string) (err error) {
 	return nil
 }
 
-func p2(taskId string) (err error) {
+func p2(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -305,7 +396,7 @@ func p2(taskId string) (err error) {
 	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
 	resultError = multierror.Append(resultError, err)
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
@@ -338,7 +429,7 @@ func p2(taskId string) (err error) {
 	return nil
 }
 
-func c1(taskId string) (err error) {
+func c1(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -382,7 +473,7 @@ func c1(taskId string) (err error) {
 	err = json.Unmarshal([]byte(task.TaskParameters[3]), &param3)
 	resultError = multierror.Append(resultError, err)
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
@@ -436,7 +527,7 @@ func c1(taskId string) (err error) {
 	return nil
 }
 
-func c2(taskId string) (err error) {
+func c2(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -487,7 +578,7 @@ func c2(taskId string) (err error) {
 	err = json.Unmarshal(c1OutByte, &param0)
 	resultError = multierror.Append(resultError, err)
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
@@ -540,7 +631,7 @@ func c2(taskId string) (err error) {
 	return nil
 }
 
-func fs(taskId string) (err error) {
+func fs(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -575,7 +666,7 @@ func fs(taskId string) (err error) {
 	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
 	resultError = multierror.Append(resultError, err)
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s())
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}

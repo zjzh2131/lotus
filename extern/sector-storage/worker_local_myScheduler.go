@@ -24,6 +24,7 @@ import (
 )
 
 var sc *SchedulerControl
+var rs *MyResourceScheduler
 
 var (
 	pending = "pending"

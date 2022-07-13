@@ -64,6 +64,6 @@ type NodeMask C.nodemask_t
 func NumaBind(node int) {
 	maskP := new(C.nodemask_t)
 	C.nodemask_zero(maskP)
-	C.nodemask_set_compat(maskP, 1)
+	C.nodemask_set_compat(maskP, C.int(node))
 	C.numa_bind_compat(maskP)
 }

@@ -298,7 +298,7 @@ func InitSector(sector storage.SectorRef, sectorType string, sectorStatus string
 	return nil
 }
 
-func InsertTaskLog(task *myModel.SealingTask, workerIp string) (string, error) {
+func InsertTaskLog(task *myModel.SealingTask, workerIp, cpus, nodeId string) (string, error) {
 	tl := myModel.SealingTaskLog{
 		SectorRef:      task.SectorRef,
 		WorkerIp:       workerIp,
@@ -309,6 +309,9 @@ func InsertTaskLog(task *myModel.SealingTask, workerIp string) (string, error) {
 		TaskType:       task.TaskType,
 		TaskError:      task.TaskError,
 		TaskStatus:     task.TaskType,
+
+		BoundCpus: cpus,
+		BoundNode: nodeId,
 
 		NodeId:    "",
 		ClusterId: "",
@@ -325,6 +328,35 @@ func InsertTaskLog(task *myModel.SealingTask, workerIp string) (string, error) {
 		return "", err
 	}
 	return id, nil
+}
+
+func InitTaskLog(sector storage.SectorRef, workerIp string) (primitive.ObjectID, error) {
+	tl := myModel.SealingTaskLog{
+		SectorRef:      sector,
+		WorkerIp:       workerIp,
+		WorkerPath:     "",
+		StartTime:      time.Now().UnixMilli(),
+		EndTime:        0,
+		TaskParameters: nil,
+		TaskType:       "",
+		TaskError:      "",
+		TaskStatus:     "",
+
+		NodeId:    "",
+		ClusterId: "",
+
+		CreatedAt: time.Now().UnixMilli(),
+		CreatedBy: workerIp,
+		UpdatedAt: 0,
+		UpdatedBy: "",
+	}
+	insertResult, err := Insert("sealing_task_logs", &tl)
+	id := fmt.Sprintf("%v", insertResult.InsertedID)
+	id = strings.Split(id, `"`)[1]
+	if err != nil {
+		return primitive.ObjectID{}, err
+	}
+	return insertResult.InsertedID.(primitive.ObjectID), nil
 }
 
 func UpdateTaskLog(objId string, update bson.M) error {

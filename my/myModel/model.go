@@ -78,6 +78,9 @@ type SealingTaskLog struct {
 	TaskError      string   `json:"task_error" bson:"task_error"`
 	TaskStatus     string   `json:"task_status" bson:"task_status"`
 
+	BoundCpus string `json:"bound_cpus" bson:"bound_cpus"`
+	BoundNode string `json:"bound_node" bson:"bound_node"`
+
 	NodeId    string `json:"node_id" bson:"node_id"`
 	ClusterId string `json:"cluster_id" bson:"cluster_id"`
 
@@ -111,7 +114,8 @@ type Sector struct {
 }
 
 type Machine struct {
-	ID primitive.ObjectID `json:"id" bson:"_id,omitempty"` // ObjectId
+	ID    primitive.ObjectID `json:"id" bson:"_id,omitempty"` // ObjectId
+	LogID primitive.ObjectID `json:"log_id" bson:"log_id"`
 
 	Ip           string        `json:"ip" bson:"ip"`
 	HardwareInfo *HardwareInfo `json:"hardware_info" bson:"hardware_info"`
@@ -152,7 +156,6 @@ type NUMANode struct {
 	NodeID    uint64   `json:"node_id" bson:"node_id"`
 	Cpus      []uint64 `json:"cpus" bson:"cpus"`
 	TotalSize uint64   `json:"total_size" bson:"total_size"`
-	P1Count   uint64   `json:"p1_count" bson:"p1_count"`
 }
 
 type FtpEnv struct {
