@@ -46,13 +46,13 @@ func init() {
 
 	MongoLock = lock.NewClient(MongoHandler.Collection(LockCollection))
 
-	//ctx := context.TODO()
+	ctx := context.TODO()
 	//Create the required and recommended indexes.
-	//err := MongoLock.CreateIndexes(ctx)
-	//if err != nil {
-	//	e := fmt.Sprintf("lock create indexes failed, err:%v\n", err)
-	//	panic(e)
-	//}
+	err := MongoLock.CreateIndexes(ctx)
+	if err != nil {
+		e := fmt.Sprintf("lock create indexes failed, err:%v\n", err)
+		panic(e)
+	}
 }
 
 func InitMongo(uri, name string, timeout time.Duration, num uint64) *mongo.Database {
