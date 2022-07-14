@@ -24,7 +24,7 @@ import (
 )
 
 var sc *SchedulerControl
-var rs *MyResourceScheduler
+var myRs *MyResourceScheduler
 
 var (
 	pending = "pending"
@@ -80,17 +80,17 @@ func (sc *SchedulerControl) myCallChildProcess() {
 	for {
 		select {
 		case apReq := <-sc.AP:
-			sc.apCp(apReq)
+			sc.Cp(apReq)
 		case p1Req := <-sc.P1:
-			sc.p1Cp(p1Req)
+			sc.Cp(p1Req)
 		case p2Req := <-sc.P2:
-			sc.p2Cp(p2Req)
+			sc.Cp(p2Req)
 		case c1Req := <-sc.C1:
-			sc.c1Cp(c1Req)
+			sc.Cp(c1Req)
 		case c2Req := <-sc.C2:
-			sc.c2Cp(c2Req)
+			sc.Cp(c2Req)
 		case fzReq := <-sc.FZ:
-			sc.finalizeSectorCp(fzReq)
+			sc.Cp(fzReq)
 		}
 	}
 }
@@ -231,15 +231,15 @@ func (sc *SchedulerControl) onceScheduler() error {
 		// step 3.2 chan <- taskReq
 		switch task.TaskType {
 		case "seal/v0/addpiece":
-			sc.ap(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			sc.ap(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef)
 		case "seal/v0/precommit/1":
-			sc.p1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			sc.p1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef)
 		case "seal/v0/precommit/2":
-			sc.p2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			sc.p2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef)
 		case "seal/v0/commit/1":
 			sc.c1(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef.ProofType, task.SectorRef)
 		case "seal/v0/commit/2":
-			sc.c2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number))
+			sc.c2(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef)
 		case "seal/v0/finalize":
 			sc.finalizeSector(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef.ProofType, task.SectorRef)
 		}
@@ -248,7 +248,7 @@ func (sc *SchedulerControl) onceScheduler() error {
 	return nil
 }
 
-func (sc *SchedulerControl) ap(taskId primitive.ObjectID, taskType string, sid uint64) {
+func (sc *SchedulerControl) ap(taskId primitive.ObjectID, taskType string, sid uint64, sectorRef storage.SectorRef) {
 	outTick := time.NewTicker(1 * time.Second)
 	select {
 	case sc.ApP1 <- struct{}{}:
@@ -262,9 +262,10 @@ func (sc *SchedulerControl) ap(taskId primitive.ObjectID, taskType string, sid u
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if ok && err == nil {
 		sc.AP <- taskReq{
-			ID:       taskId,
-			TaskType: taskType,
-			SectorId: sid,
+			ID:        taskId,
+			TaskType:  taskType,
+			SectorId:  sid,
+			SectorRef: sectorRef,
 		}
 		return
 	}
@@ -274,7 +275,7 @@ func (sc *SchedulerControl) ap(taskId primitive.ObjectID, taskType string, sid u
 	}
 }
 
-func (sc *SchedulerControl) p1(taskId primitive.ObjectID, taskType string, sid uint64) {
+func (sc *SchedulerControl) p1(taskId primitive.ObjectID, taskType string, sid uint64, sectorRef storage.SectorRef) {
 	outTick := time.NewTicker(1 * time.Second)
 	select {
 	case sc.ApP1 <- struct{}{}:
@@ -288,9 +289,10 @@ func (sc *SchedulerControl) p1(taskId primitive.ObjectID, taskType string, sid u
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if ok && err == nil {
 		sc.P1 <- taskReq{
-			ID:       taskId,
-			TaskType: taskType,
-			SectorId: sid,
+			ID:        taskId,
+			TaskType:  taskType,
+			SectorId:  sid,
+			SectorRef: sectorRef,
 		}
 		return
 	}
@@ -300,7 +302,7 @@ func (sc *SchedulerControl) p1(taskId primitive.ObjectID, taskType string, sid u
 	}
 }
 
-func (sc *SchedulerControl) p2(taskId primitive.ObjectID, taskType string, sid uint64) {
+func (sc *SchedulerControl) p2(taskId primitive.ObjectID, taskType string, sid uint64, sectorRef storage.SectorRef) {
 	outTick := time.NewTicker(1 * time.Second)
 	select {
 	case sc.P2C2 <- struct{}{}:
@@ -314,9 +316,10 @@ func (sc *SchedulerControl) p2(taskId primitive.ObjectID, taskType string, sid u
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if ok && err == nil {
 		sc.P2 <- taskReq{
-			ID:       taskId,
-			TaskType: taskType,
-			SectorId: sid,
+			ID:        taskId,
+			TaskType:  taskType,
+			SectorId:  sid,
+			SectorRef: sectorRef,
 		}
 		return
 	}
@@ -343,7 +346,7 @@ func (sc *SchedulerControl) c1(taskId primitive.ObjectID, taskType string, sid u
 	}
 }
 
-func (sc *SchedulerControl) c2(taskId primitive.ObjectID, taskType string, sid uint64) {
+func (sc *SchedulerControl) c2(taskId primitive.ObjectID, taskType string, sid uint64, sectorRef storage.SectorRef) {
 	outTick := time.NewTicker(1 * time.Second)
 	select {
 	case sc.P2C2 <- struct{}{}:
@@ -357,9 +360,10 @@ func (sc *SchedulerControl) c2(taskId primitive.ObjectID, taskType string, sid u
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if ok && err == nil {
 		sc.C2 <- taskReq{
-			ID:       taskId,
-			TaskType: taskType,
-			SectorId: sid,
+			ID:        taskId,
+			TaskType:  taskType,
+			SectorId:  sid,
+			SectorRef: sectorRef,
 		}
 		return
 	}
@@ -388,19 +392,66 @@ func (sc *SchedulerControl) finalizeSector(taskId primitive.ObjectID, taskType s
 	}
 }
 
+func (sc *SchedulerControl) Cp(task taskReq) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	id := fmt.Sprintf("%v", task.ID)
+	id = strings.Split(id, `"`)[1]
+
+	sector, _ := json.Marshal(task)
+	go func() {
+		switch task.TaskType {
+		case "seal/v0/addpiece":
+			defer func() { <-sc.ApP1 }()
+		case "seal/v0/precommit/1":
+			defer func() { <-sc.ApP1 }()
+		case "seal/v0/precommit/2":
+			defer func() { <-sc.P2C2 }()
+		case "seal/v0/commit/1":
+		case "seal/v0/commit/2":
+			defer func() { <-sc.P2C2 }()
+		case "seal/v0/finalize":
+			defer func() {
+				<-sc.SealingCh
+				delete(sc.SealingM, uint64(task.SectorId))
+			}()
+		default:
+		}
+		var cpusStr []string
+		bound, freed, ok := myRs.GetNuma(task, tasksNeedNumaResource[task.TaskType].cpuCount)
+		if !ok {
+			myMongo.UpdateStatus(task.ID, "failed")
+		}
+		defer freed()
+		for _, v := range bound.cpus {
+			cpusStr = append(cpusStr, strconv.Itoa(v))
+		}
+
+		log.Infof("child process start: SectorId(%v), TaskType(%v)\n", task.SectorId, task.TaskType)
+		err := callChildProcess([]string{task.TaskType, id, string(sector), strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId)})
+		if err != nil {
+			myMongo.UpdateStatus(task.ID, "failed")
+		}
+		log.Infof("child process end: SectorId(%v), TaskType(%v)\n", task.SectorId, task.TaskType)
+	}()
+}
+
 func (sc *SchedulerControl) apCp(apReq taskReq) {
 	sc.lk.Lock()
 	defer sc.lk.Unlock()
 
 	id := fmt.Sprintf("%v", apReq.ID)
 	id = strings.Split(id, `"`)[1]
+
+	sector, _ := json.Marshal(apReq)
 	go func() {
 		defer func() {
 			<-sc.ApP1
 		}()
 
 		log.Infof("apCp start: SectorId(%v)\n", apReq.SectorId)
-		err := callChildProcess([]string{apReq.TaskType, id})
+		err := callChildProcess([]string{apReq.TaskType, id, string(sector)})
 		if err != nil {
 			myMongo.UpdateStatus(apReq.ID, "failed")
 		}
@@ -414,13 +465,15 @@ func (sc *SchedulerControl) p1Cp(p1Req taskReq) {
 
 	id := fmt.Sprintf("%v", p1Req.ID)
 	id = strings.Split(id, `"`)[1]
+
+	sector, _ := json.Marshal(p1Req)
 	go func() {
 		defer func() {
 			<-sc.ApP1
 		}()
 
 		log.Infof("p1Cp start: SectorId(%v)\n", p1Req.SectorId)
-		err := callChildProcess([]string{p1Req.TaskType, id})
+		err := callChildProcess([]string{p1Req.TaskType, id, string(sector)})
 		if err != nil {
 			myMongo.UpdateStatus(p1Req.ID, "failed")
 		}
@@ -434,13 +487,15 @@ func (sc *SchedulerControl) p2Cp(p2Req taskReq) {
 
 	id := fmt.Sprintf("%v", p2Req.ID)
 	id = strings.Split(id, `"`)[1]
+
+	sector, _ := json.Marshal(p2Req)
 	go func() {
 		defer func() {
 			<-sc.P2C2
 		}()
 
 		log.Infof("p2Cp start: SectorId(%v)\n", p2Req.SectorId)
-		err := callChildProcess([]string{p2Req.TaskType, id})
+		err := callChildProcess([]string{p2Req.TaskType, id, string(sector)})
 		if err != nil {
 			myMongo.UpdateStatus(p2Req.ID, "failed")
 		}
@@ -454,9 +509,11 @@ func (sc *SchedulerControl) c1Cp(c1Req taskReq) {
 
 	id := fmt.Sprintf("%v", c1Req.ID)
 	id = strings.Split(id, `"`)[1]
+
+	sector, _ := json.Marshal(c1Req)
 	go func() {
 		log.Infof("c1Cp start: SectorId(%v)\n", c1Req.SectorId)
-		err := callChildProcess([]string{c1Req.TaskType, id})
+		err := callChildProcess([]string{c1Req.TaskType, id, string(sector)})
 		if err != nil {
 			myMongo.UpdateStatus(c1Req.ID, "failed")
 		}
@@ -470,13 +527,15 @@ func (sc *SchedulerControl) c2Cp(c2Req taskReq) {
 
 	id := fmt.Sprintf("%v", c2Req.ID)
 	id = strings.Split(id, `"`)[1]
+
+	sector, _ := json.Marshal(c2Req)
 	go func() {
 		defer func() {
 			<-sc.P2C2
 		}()
 
 		log.Infof("c2Cp start: SectorId(%v)\n", c2Req.SectorId)
-		err := callChildProcess([]string{c2Req.TaskType, id})
+		err := callChildProcess([]string{c2Req.TaskType, id, string(sector)})
 		if err != nil {
 			myMongo.UpdateStatus(c2Req.ID, "failed")
 		}
@@ -490,6 +549,8 @@ func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
 
 	id := fmt.Sprintf("%v", fzReq.ID)
 	id = strings.Split(id, `"`)[1]
+
+	sector, _ := json.Marshal(fzReq)
 	go func() {
 		defer func() {
 			<-sc.SealingCh
@@ -497,7 +558,7 @@ func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
 		}()
 
 		log.Infof("finalizeSectorCp start: SectorId(%v)\n", fzReq.SectorId)
-		err := callChildProcess([]string{fzReq.TaskType, id})
+		err := callChildProcess([]string{fzReq.TaskType, id, string(sector)})
 		if err != nil {
 			myMongo.UpdateStatus(fzReq.ID, "failed")
 			return

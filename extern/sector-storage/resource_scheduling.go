@@ -104,14 +104,12 @@ func (ns *numaSche) occupy(need NeedResource) (bound BoundResource, freed func()
 	// step2 get
 	boundCpu, cpuFreed, ok := selectedNode.cpus.occupy(need)
 	if !ok {
-		fmt.Println("cpu !ok")
-		return BoundResource{}, func() {}, false
+		return BoundResource{nodeId: -1}, func() {}, false
 	}
 	boundMem, memFreed, ok := selectedNode.occupy(need)
 	if !ok {
-		fmt.Println("mem !ok")
 		cpuFreed()
-		return BoundResource{}, func() {}, false
+		return BoundResource{nodeId: -1}, func() {}, false
 	}
 	return BoundResource{
 			cpus:   boundCpu.cpus,
@@ -143,6 +141,7 @@ func (n *node) occupy(need NeedResource) (bound BoundResource, freed func(), ok 
 			cpus:   nil,
 			nodeId: n.nodeId,
 		}, func() {
+			fmt.Println("memory freed")
 			atomic.AddUint64(&n.usedMem, ^(maxMem - 1))
 		}, true
 }

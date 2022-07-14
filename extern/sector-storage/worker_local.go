@@ -186,7 +186,8 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc,
 			return nil
 		})
 
-		rs = NewMyRS()
+		myRs = NewMyRS()
+		myRs.String()
 
 		log.Info("=================================myScheduler start=========================================")
 		//go w.myScheduler()

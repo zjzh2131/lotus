@@ -15,7 +15,6 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -79,26 +78,25 @@ func init() {
 
 func register() error {
 	log.Infof("child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-	task := taskReq{
-		TaskType: os.Args[0],
-	}
-	bound, freed, ok := rs.GetNuma(task, tasksNeedNumaResource[os.Args[0]].cpuCount)
-	if ok {
-		defer freed()
-		var cpusStr []string
-		for _, v := range bound.cpus {
-			cpusStr = append(cpusStr, strconv.Itoa(v))
-		}
-		err := boundCpu(strings.Join(cpusStr, ","), strconv.Itoa(os.Getpid()))
+
+	// set numa
+	if os.Args[3] != "" {
+		err := boundCpu(os.Args[3], strconv.Itoa(os.Getpid()))
 		if err != nil {
 			return errors.New("bound cpu error")
 		}
-		myNuma.SetPreferred(bound.nodeId)
+		fmt.Printf("bound cpus: [%v]\n", os.Args[3])
+	}
+
+	nodeId, _ := strconv.Atoi(os.Args[4])
+	if nodeId == -1 {
+		myNuma.SetPreferred(nodeId)
+		fmt.Printf("bound node memory: [%v]\n", nodeId)
 	}
 
 	// call
 	if call, ok := tasksCaller[os.Args[0]]; ok {
-		err := call(os.Args[1], fmt.Sprintf("%v", bound.cpus), strconv.Itoa(bound.nodeId))
+		err := call(os.Args[1], os.Args[3], os.Args[4])
 		if err != nil {
 			return err
 		}
