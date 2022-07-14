@@ -121,38 +121,36 @@ var myTask = &cli.Command{
 		id := cctx.Args().Get(1)
 		cpus := cctx.Args().Get(3)
 		nodeId := cctx.Args().Get(4)
-		fmt.Println(taskType, id, cpus, nodeId)
-		return nil
 		switch taskType {
 		case "seal/v0/addpiece":
 			err := ap(id, cpus, nodeId)
 			if err != nil {
-				return err
+				panic(err)
 			}
 		case "seal/v0/precommit/1":
 			err := p1(id, cpus, nodeId)
 			if err != nil {
-				return err
+				panic(err)
 			}
 		case "seal/v0/precommit/2":
 			err := p2(id, cpus, nodeId)
 			if err != nil {
-				return err
+				panic(err)
 			}
 		case "seal/v0/commit/1":
 			err := c1(id, cpus, nodeId)
 			if err != nil {
-				return err
+				panic(err)
 			}
 		case "seal/v0/commit/2":
 			err := c2(id, cpus, nodeId)
 			if err != nil {
-				return err
+				panic(err)
 			}
 		case "seal/v0/finalize":
 			err := fs(id, cpus, nodeId)
 			if err != nil {
-				return err
+				panic(err)
 			}
 		default:
 		}

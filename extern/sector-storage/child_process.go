@@ -197,7 +197,7 @@ func callCp(taskType, cpus, nodeId, taskId, sector string) error {
 	// numactl --physcpubind=28,29 --membind=7 ./test
 	bindCpu := "--physcpubind=" + cpus
 	bindMem := "--membind=" + nodeId
-	cmd := exec.Command("numactl", bindCpu, bindMem, "lotus-worker", "myTask", taskType, taskId, sector, cpus, nodeId)
+	cmd := exec.Command("numactl", bindCpu, bindMem, "lotus-worker", "tasks", "myTask", taskType, taskId, sector, cpus, nodeId)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
