@@ -193,6 +193,20 @@ func callChildProcess(args []string) error {
 	return nil
 }
 
+func callCp(taskType, cpus, nodeId, taskId, sector string) error {
+	// numactl --physcpubind=28,29 --membind=7 ./test
+	bindCpu := "--physcpubind=" + cpus
+	bindMem := "--membind=" + nodeId
+	cmd := exec.Command("numactl", bindCpu, bindMem, "lotus-worker", "myTask", taskType, taskId, sector, cpus, nodeId)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func ap(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
@@ -501,8 +515,8 @@ func c1(taskId, cpus, node string) (err error) {
 		return err
 	}
 
-	// step 2 ftp migrate
-	err = migrateC1out(task.SectorRef)
+	// step 2 ftp Migrate
+	err = MigrateC1out(task.SectorRef)
 	if err != nil {
 		return err
 	}
@@ -606,7 +620,7 @@ func c2(taskId, cpus, node string) (err error) {
 	//	return err
 	//}
 	//
-	//// step 2 ftp migrate
+	//// step 2 ftp Migrate
 	//err = migrateC2out(task.SectorRef)
 	//if err != nil {
 	//	return err
@@ -679,14 +693,14 @@ func fs(taskId, cpus, node string) (err error) {
 		return nil
 	}
 
-	log.Infof("migrate start: SectorId(%v)\n", task.SectorRef.ID.Number)
-	err = migrate(task.SectorRef)
+	log.Infof("Migrate start: SectorId(%v)\n", task.SectorRef.ID.Number)
+	err = Migrate(task.SectorRef)
 	if err != nil {
-		fmt.Println("migrate err:", err)
+		fmt.Println("Migrate err:", err)
 		myMongo.UpdateStatus(task.ID, "failed")
 		return
 	}
-	log.Infof("migrate end: SectorId(%v)\n", task.SectorRef.ID.Number)
+	log.Infof("Migrate end: SectorId(%v)\n", task.SectorRef.ID.Number)
 
 	err = myMongo.UpdateTaskLog(logId, bson.M{
 		"$set": bson.D{

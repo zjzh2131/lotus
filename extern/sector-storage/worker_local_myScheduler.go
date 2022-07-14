@@ -429,7 +429,8 @@ func (sc *SchedulerControl) Cp(task taskReq) {
 		}
 
 		log.Infof("child process start: SectorId(%v), TaskType(%v)\n", task.SectorId, task.TaskType)
-		err := callChildProcess([]string{task.TaskType, id, string(sector), strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId)})
+		//err := callChildProcess([]string{task.TaskType, id, string(sector), strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId)})
+		err := callCp(task.TaskType, strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId), id, string(sector))
 		if err != nil {
 			myMongo.UpdateStatus(task.ID, "failed")
 		}
@@ -566,14 +567,14 @@ func (sc *SchedulerControl) finalizeSectorCp(fzReq taskReq) {
 		//myMongo.UpdateSectorStatus(fzReq.SectorId, "living")
 		log.Infof("finalizeSectorCp end: SectorId(%v)\n", fzReq.SectorId)
 
-		//log.Infof("migrate start: SectorId(%v)\n", fzReq.SectorId)
-		//err = migrate(fzReq)
+		//log.Infof("Migrate start: SectorId(%v)\n", fzReq.SectorId)
+		//err = Migrate(fzReq)
 		//if err != nil {
-		//	fmt.Println("migrate err:", err)
+		//	fmt.Println("Migrate err:", err)
 		//	myMongo.UpdateStatus(fzReq.ID, "failed")
 		//	return
 		//}
-		//log.Infof("migrate end: SectorId(%v)\n", fzReq.SectorId)
+		//log.Infof("Migrate end: SectorId(%v)\n", fzReq.SectorId)
 	}()
 }
 
@@ -598,8 +599,8 @@ func (sc *SchedulerControl) String() string {
 	return sealingMStr + sealingStr + apP1Str + p2c2Str + aPStr + p1Str + p2Str + c1Str + c2Str + fzStr
 }
 
-func migrate(sector storage.SectorRef) error {
-	// TODO ftp migrate
+func Migrate(sector storage.SectorRef) error {
+	// TODO ftp Migrate
 	sid, err := myMongo.FindSectorsBySid(uint64(sector.ID.Number))
 	if err != nil {
 		return err
@@ -645,7 +646,7 @@ func migrate(sector storage.SectorRef) error {
 	return nil
 }
 
-func migrateC1out(sectorRef storage.SectorRef) error {
+func MigrateC1out(sectorRef storage.SectorRef) error {
 	folder := fmt.Sprintf("s-t0%v-%v", sectorRef.ID.Miner, sectorRef.ID.Number)
 
 	ip := myUtils.GetLocalIPv4s()

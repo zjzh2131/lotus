@@ -426,7 +426,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 			if err != nil {
 				return abi.PieceInfo{}, err
 			}
-			// step 3 ftp migrate
+			// step 3 ftp Migrate
 			err = migrateAddPiece(sector, snowId)
 		}
 
@@ -842,7 +842,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		if err != nil {
 			return err
 		}
-		//// TODO option migrate path
+		//// TODO option Migrate path
 		storageMachine, err := migration.SelectStoreMachine(context.TODO(), migration.NetWorkIOBalance, "")
 		if err != nil {
 			fmt.Println("=========================================================storageMachine err:", err)
@@ -882,7 +882,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		return err
 	}
 	myMongo.UpdateSectorStatus(uint64(sector.ID.Number), "living")
-	// // TODO go migrate()
+	// // TODO go Migrate()
 	return nil
 }
 
