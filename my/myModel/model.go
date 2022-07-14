@@ -80,6 +80,7 @@ type SealingTaskLog struct {
 
 	BoundCpus string `json:"bound_cpus" bson:"bound_cpus"`
 	BoundNode string `json:"bound_node" bson:"bound_node"`
+	Pid       int    `json:"pid" bson:"pid"`
 
 	NodeId    string `json:"node_id" bson:"node_id"`
 	ClusterId string `json:"cluster_id" bson:"cluster_id"`

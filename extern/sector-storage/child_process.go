@@ -236,7 +236,7 @@ func ap(taskId, cpus, node string) (err error) {
 		return err
 	}
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node, os.Getpid())
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
@@ -327,7 +327,7 @@ func p1(taskId, cpus, node string) (err error) {
 	err = json.Unmarshal([]byte(task.TaskParameters[1]), &param1)
 	resultError = multierror.Append(resultError, err)
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node, os.Getpid())
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
@@ -394,7 +394,7 @@ func p2(taskId, cpus, node string) (err error) {
 	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
 	resultError = multierror.Append(resultError, err)
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node, os.Getpid())
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
@@ -471,7 +471,7 @@ func c1(taskId, cpus, node string) (err error) {
 	err = json.Unmarshal([]byte(task.TaskParameters[3]), &param3)
 	resultError = multierror.Append(resultError, err)
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node, os.Getpid())
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
@@ -576,7 +576,7 @@ func c2(taskId, cpus, node string) (err error) {
 	err = json.Unmarshal(c1OutByte, &param0)
 	resultError = multierror.Append(resultError, err)
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node, os.Getpid())
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
@@ -664,7 +664,7 @@ func fs(taskId, cpus, node string) (err error) {
 	err = json.Unmarshal([]byte(task.TaskParameters[0]), &param0)
 	resultError = multierror.Append(resultError, err)
 
-	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node)
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), cpus, node, os.Getpid())
 	if err != nil {
 		resultError = multierror.Append(resultError, err)
 	}
