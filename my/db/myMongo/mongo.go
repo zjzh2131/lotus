@@ -298,7 +298,7 @@ func InitSector(sector storage.SectorRef, sectorType string, sectorStatus string
 	return nil
 }
 
-func InsertTaskLog(task *myModel.SealingTask, workerIp, cpus, nodeId string, pid int) (string, error) {
+func InsertTaskLog(task *myModel.SealingTask, workerIp, cpus, nodeId string, pid, ppid int) (string, error) {
 	tl := myModel.SealingTaskLog{
 		SectorRef:      task.SectorRef,
 		WorkerIp:       workerIp,
@@ -313,6 +313,7 @@ func InsertTaskLog(task *myModel.SealingTask, workerIp, cpus, nodeId string, pid
 		BoundCpus: cpus,
 		BoundNode: nodeId,
 		Pid:       pid,
+		Ppid:      ppid,
 
 		NodeId:    "",
 		ClusterId: "",
