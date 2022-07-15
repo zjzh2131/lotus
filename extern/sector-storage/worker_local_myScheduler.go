@@ -86,6 +86,10 @@ func (sc *SchedulerControl) myCallChildProcess() {
 		lc1 := len(sc.C1)
 		lc2 := len(sc.C2)
 		lfz := len(sc.FZ)
+		if lap|lp1|lp2|lc1|lc2|lfz == 0 {
+			time.Sleep(10 * time.Second)
+			continue
+		}
 		for i := 0; i < lap; i++ {
 			select {
 			case task := <-sc.AP:
