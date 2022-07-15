@@ -88,42 +88,49 @@ func (sc *SchedulerControl) myCallChildProcess() {
 		lfz := len(sc.FZ)
 		if lap|lp1|lp2|lc1|lc2|lfz == 0 {
 			time.Sleep(10 * time.Second)
+			sc.lk.Unlock()
 			continue
 		}
 		for i := 0; i < lap; i++ {
 			select {
 			case task := <-sc.AP:
 				tasks = append(tasks, task)
+			default:
 			}
 		}
 		for i := 0; i < lp1; i++ {
 			select {
 			case task := <-sc.P1:
 				tasks = append(tasks, task)
+			default:
 			}
 		}
 		for i := 0; i < lp2; i++ {
 			select {
 			case task := <-sc.P2:
 				tasks = append(tasks, task)
+			default:
 			}
 		}
 		for i := 0; i < lc1; i++ {
 			select {
 			case task := <-sc.C1:
 				tasks = append(tasks, task)
+			default:
 			}
 		}
 		for i := 0; i < lc2; i++ {
 			select {
 			case task := <-sc.C2:
 				tasks = append(tasks, task)
+			default:
 			}
 		}
 		for i := 0; i < lfz; i++ {
 			select {
 			case task := <-sc.FZ:
 				tasks = append(tasks, task)
+			default:
 			}
 		}
 		sc.tmpCp(tasks)
@@ -288,9 +295,7 @@ func (sc *SchedulerControl) onceScheduler() error {
 			outTick := time.NewTicker(1 * time.Second)
 			select {
 			case sc.SealingCh <- struct{}{}:
-				sc.lk.Lock()
 				sc.SealingM[uint64(task.SectorRef.ID.Number)] = struct{}{}
-				sc.lk.Unlock()
 			case <-outTick.C:
 				fmt.Println("===========================================:超出sealing限制")
 				continue
