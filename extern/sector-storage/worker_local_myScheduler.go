@@ -80,23 +80,47 @@ func (sc *SchedulerControl) myCallChildProcess() {
 	for {
 		sc.lk.Lock()
 		tasks := []taskReq{}
-		for task := range sc.AP {
-			tasks = append(tasks, task)
+		lap := len(sc.AP)
+		lp1 := len(sc.P1)
+		lp2 := len(sc.P2)
+		lc1 := len(sc.C1)
+		lc2 := len(sc.C2)
+		lfz := len(sc.FZ)
+		for i := 0; i < lap; i++ {
+			select {
+			case task := <-sc.AP:
+				tasks = append(tasks, task)
+			}
 		}
-		for task := range sc.P1 {
-			tasks = append(tasks, task)
+		for i := 0; i < lp1; i++ {
+			select {
+			case task := <-sc.P1:
+				tasks = append(tasks, task)
+			}
 		}
-		for task := range sc.P2 {
-			tasks = append(tasks, task)
+		for i := 0; i < lp2; i++ {
+			select {
+			case task := <-sc.P2:
+				tasks = append(tasks, task)
+			}
 		}
-		for task := range sc.C1 {
-			tasks = append(tasks, task)
+		for i := 0; i < lc1; i++ {
+			select {
+			case task := <-sc.C1:
+				tasks = append(tasks, task)
+			}
 		}
-		for task := range sc.C2 {
-			tasks = append(tasks, task)
+		for i := 0; i < lc2; i++ {
+			select {
+			case task := <-sc.C2:
+				tasks = append(tasks, task)
+			}
 		}
-		for task := range sc.FZ {
-			tasks = append(tasks, task)
+		for i := 0; i < lfz; i++ {
+			select {
+			case task := <-sc.FZ:
+				tasks = append(tasks, task)
+			}
 		}
 		sc.tmpCp(tasks)
 		sc.lk.Unlock()
