@@ -15,11 +15,13 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 	"github.com/hashicorp/go-multierror"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -119,41 +121,108 @@ var myTask = &cli.Command{
 
 		taskType := cctx.Args().Get(0)
 		id := cctx.Args().Get(1)
-		cpus := cctx.Args().Get(3)
-		nodeId := cctx.Args().Get(4)
-		switch taskType {
-		case "seal/v0/addpiece":
-			err := ap(id, cpus, nodeId)
-			if err != nil {
-				panic(err)
+		//cpus := cctx.Args().Get(3)
+		//nodeId := cctx.Args().Get(4)
+
+		taskTypes := strings.Split(taskType, ",")
+		ids := strings.Split(id, ",")
+
+		wg := sync.WaitGroup{}
+
+		for i := 0; i < len(taskTypes); i++ {
+			wg.Add(1)
+			switch taskTypes[i] {
+			case "seal/v0/addpiece":
+				go func() {
+					defer wg.Done()
+					err := ap(ids[i], "", "")
+					if err != nil {
+						hex, _ := primitive.ObjectIDFromHex(ids[i])
+						myMongo.UpdateStatus(hex, "failed")
+					}
+				}()
+			case "seal/v0/precommit/1":
+				go func() {
+					defer wg.Done()
+					err := p1(ids[i], "", "")
+					if err != nil {
+						hex, _ := primitive.ObjectIDFromHex(ids[i])
+						myMongo.UpdateStatus(hex, "failed")
+					}
+				}()
+			case "seal/v0/precommit/2":
+				go func() {
+					defer wg.Done()
+					err := p2(ids[i], "", "")
+					if err != nil {
+						hex, _ := primitive.ObjectIDFromHex(ids[i])
+						myMongo.UpdateStatus(hex, "failed")
+					}
+				}()
+			case "seal/v0/commit/1":
+				go func() {
+					defer wg.Done()
+					err := c1(ids[i], "", "")
+					if err != nil {
+						hex, _ := primitive.ObjectIDFromHex(ids[i])
+						myMongo.UpdateStatus(hex, "failed")
+					}
+				}()
+			case "seal/v0/commit/2":
+				go func() {
+					defer wg.Done()
+					err := c2(ids[i], "", "")
+					if err != nil {
+						hex, _ := primitive.ObjectIDFromHex(ids[i])
+						myMongo.UpdateStatus(hex, "failed")
+					}
+				}()
+			case "seal/v0/finalize":
+				go func() {
+					defer wg.Done()
+					err := fs(ids[i], "", "")
+					if err != nil {
+						hex, _ := primitive.ObjectIDFromHex(ids[i])
+						myMongo.UpdateStatus(hex, "failed")
+					}
+				}()
+			default:
 			}
-		case "seal/v0/precommit/1":
-			err := p1(id, cpus, nodeId)
-			if err != nil {
-				panic(err)
-			}
-		case "seal/v0/precommit/2":
-			err := p2(id, cpus, nodeId)
-			if err != nil {
-				panic(err)
-			}
-		case "seal/v0/commit/1":
-			err := c1(id, cpus, nodeId)
-			if err != nil {
-				panic(err)
-			}
-		case "seal/v0/commit/2":
-			err := c2(id, cpus, nodeId)
-			if err != nil {
-				panic(err)
-			}
-		case "seal/v0/finalize":
-			err := fs(id, cpus, nodeId)
-			if err != nil {
-				panic(err)
-			}
-		default:
 		}
+		wg.Wait()
+		//switch taskType {
+		//case "seal/v0/addpiece":
+		//	err := ap(id, cpus, nodeId)
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//case "seal/v0/precommit/1":
+		//	err := p1(id, cpus, nodeId)
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//case "seal/v0/precommit/2":
+		//	err := p2(id, cpus, nodeId)
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//case "seal/v0/commit/1":
+		//	err := c1(id, cpus, nodeId)
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//case "seal/v0/commit/2":
+		//	err := c2(id, cpus, nodeId)
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//case "seal/v0/finalize":
+		//	err := fs(id, cpus, nodeId)
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//default:
+		//}
 		return nil
 	},
 }

@@ -78,21 +78,63 @@ func (sc *SchedulerControl) myScheduler() {
 func (sc *SchedulerControl) myCallChildProcess() {
 	// step 4. child process
 	for {
-		select {
-		case apReq := <-sc.AP:
-			sc.Cp(apReq)
-		case p1Req := <-sc.P1:
-			sc.Cp(p1Req)
-		case p2Req := <-sc.P2:
-			sc.Cp(p2Req)
-		case c1Req := <-sc.C1:
-			sc.Cp(c1Req)
-		case c2Req := <-sc.C2:
-			sc.Cp(c2Req)
-		case fzReq := <-sc.FZ:
-			sc.Cp(fzReq)
+		sc.lk.Lock()
+		tasks := []taskReq{}
+		for task := range sc.AP {
+			tasks = append(tasks, task)
 		}
+		for task := range sc.P1 {
+			tasks = append(tasks, task)
+		}
+		for task := range sc.P2 {
+			tasks = append(tasks, task)
+		}
+		for task := range sc.C1 {
+			tasks = append(tasks, task)
+		}
+		for task := range sc.C2 {
+			tasks = append(tasks, task)
+		}
+		for task := range sc.FZ {
+			tasks = append(tasks, task)
+		}
+		sc.tmpCp(tasks)
+		sc.lk.Unlock()
+		//select {
+		//case apReq := <-sc.AP:
+		//	sc.Cp(apReq)
+		//case p1Req := <-sc.P1:
+		//	sc.Cp(p1Req)
+		//case p2Req := <-sc.P2:
+		//	sc.Cp(p2Req)
+		//case c1Req := <-sc.C1:
+		//	sc.Cp(c1Req)
+		//case c2Req := <-sc.C2:
+		//	sc.Cp(c2Req)
+		//case fzReq := <-sc.FZ:
+		//	sc.Cp(fzReq)
+		//}
 	}
+}
+
+func (sc *SchedulerControl) tmpCp(tasks []taskReq) {
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
+	go func() {
+		taskTypes := []string{}
+		ids := []string{}
+		for _, task := range tasks {
+			id := fmt.Sprintf("%v", task.ID)
+			id = strings.Split(id, `"`)[1]
+			ids = append(ids, id)
+			taskTypes = append(taskTypes, task.TaskType)
+		}
+		_ = callCp(strings.Join(taskTypes, ","), "58,59", "6", strings.Join(ids, ","), "")
+		//if err != nil {
+		//	myMongo.UpdateStatus(task.ID, "failed")
+		//}
+	}()
 }
 
 func (sc *SchedulerControl) getTask() ([]*myModel.SealingTask, error) {
@@ -212,6 +254,8 @@ func (sc *SchedulerControl) onceScheduler() error {
 	if err != nil {
 		return err
 	}
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
 	for _, task := range tasks {
 		log.Infof("get task, objId: [%v], sector_id: [%v], task_type: [%v]\n", task.ID.String(), task.SectorRef.ID.Number, task.TaskType)
 		// step 3. resource placeholder
@@ -243,8 +287,8 @@ func (sc *SchedulerControl) onceScheduler() error {
 		case "seal/v0/finalize":
 			sc.finalizeSector(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef.ProofType, task.SectorRef)
 		}
-		fmt.Println(sc.String())
 	}
+	fmt.Println(sc.String())
 	return nil
 }
 
