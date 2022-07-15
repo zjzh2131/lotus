@@ -341,8 +341,8 @@ func (sc *SchedulerControl) onceScheduler() error {
 		case "seal/v0/finalize":
 			sc.finalizeSector(task.ID, task.TaskType, uint64(task.SectorRef.ID.Number), task.SectorRef.ProofType, task.SectorRef)
 		}
+		fmt.Println(sc.String())
 	}
-	fmt.Println(sc.String())
 	return nil
 }
 
