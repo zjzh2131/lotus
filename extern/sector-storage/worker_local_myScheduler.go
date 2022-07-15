@@ -118,9 +118,6 @@ func (sc *SchedulerControl) myCallChildProcess() {
 }
 
 func (sc *SchedulerControl) tmpCp(tasks []taskReq) {
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
-
 	go func() {
 		taskTypes := []string{}
 		ids := []string{}
