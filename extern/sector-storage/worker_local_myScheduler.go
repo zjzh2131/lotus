@@ -78,10 +78,8 @@ func (sc *SchedulerControl) myScheduler() {
 func (sc *SchedulerControl) myCallChildProcess() {
 	// step 4. child process
 	for {
-		fmt.Println("-=================================================calllllll")
 		time.Sleep(10 * time.Second)
 		sc.lk.Lock()
-		fmt.Println("-=================================================get lock")
 		tasks := []taskReq{}
 		lap := len(sc.AP)
 		lp1 := len(sc.P1)
@@ -169,10 +167,11 @@ func (sc *SchedulerControl) tmpCp(tasks []taskReq) {
 			taskTypes = append(taskTypes, task.TaskType)
 		}
 		fmt.Println("================================================qwjoidnqwudoqwnuoqwo")
-		_ = callCp(strings.Join(taskTypes, ","), "58,59", "6", strings.Join(ids, ","), "")
-		//if err != nil {
-		//	myMongo.UpdateStatus(task.ID, "failed")
-		//}
+		err := callCp(strings.Join(taskTypes, ","), "58,59", "6", strings.Join(ids, ","), "")
+		if err != nil {
+			fmt.Println(err)
+			//myMongo.UpdateStatus(task.ID, "failed")
+		}
 	}()
 }
 
@@ -294,7 +293,6 @@ func (sc *SchedulerControl) onceScheduler() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("=======================================get task")
 	tmpP1Tasks := []*myModel.SealingTask{}
 	for k, v := range tasks {
 		if v.TaskType == "seal/v0/precommit/1" {
