@@ -282,12 +282,27 @@ func (sc *SchedulerControl) onceScheduler() error {
 		}
 	}()
 
+	sc.lk.Lock()
+	defer sc.lk.Unlock()
+
 	tasks, err := sc.onceGetTask()
 	if err != nil {
 		return err
 	}
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
+	tmpP1Tasks := []*myModel.SealingTask{}
+	for k, v := range tasks {
+		if v.TaskType == "seal/v0/precommit/1" {
+			tmpP1Tasks = append(tmpP1Tasks, tasks[k])
+			tasks = append(tasks[:k], tasks[k+1:]...)
+		}
+	}
+	for {
+		if len(tmpP1Tasks) < 5 {
+			break
+		} else {
+			tasks = append(tasks, tmpP1Tasks...)
+		}
+	}
 	for _, task := range tasks {
 		log.Infof("get task, objId: [%v], sector_id: [%v], task_type: [%v]\n", task.ID.String(), task.SectorRef.ID.Number, task.TaskType)
 		// step 3. resource placeholder
