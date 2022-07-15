@@ -78,8 +78,10 @@ func (sc *SchedulerControl) myScheduler() {
 func (sc *SchedulerControl) myCallChildProcess() {
 	// step 4. child process
 	for {
+		fmt.Println("-=================================================calllllll")
 		time.Sleep(10 * time.Second)
 		sc.lk.Lock()
+		fmt.Println("-=================================================get lock")
 		tasks := []taskReq{}
 		lap := len(sc.AP)
 		lp1 := len(sc.P1)
@@ -133,6 +135,7 @@ func (sc *SchedulerControl) myCallChildProcess() {
 			default:
 			}
 		}
+		fmt.Println("-=================================================tmpcp")
 		sc.tmpCp(tasks)
 		sc.lk.Unlock()
 		//select {
@@ -154,6 +157,9 @@ func (sc *SchedulerControl) myCallChildProcess() {
 
 func (sc *SchedulerControl) tmpCp(tasks []taskReq) {
 	go func() {
+		if len(tasks) == 0 {
+			return
+		}
 		taskTypes := []string{}
 		ids := []string{}
 		for _, task := range tasks {
@@ -162,6 +168,7 @@ func (sc *SchedulerControl) tmpCp(tasks []taskReq) {
 			ids = append(ids, id)
 			taskTypes = append(taskTypes, task.TaskType)
 		}
+		fmt.Println("================================================qwjoidnqwudoqwnuoqwo")
 		_ = callCp(strings.Join(taskTypes, ","), "58,59", "6", strings.Join(ids, ","), "")
 		//if err != nil {
 		//	myMongo.UpdateStatus(task.ID, "failed")
@@ -207,8 +214,6 @@ func (sc *SchedulerControl) getTask() ([]*myModel.SealingTask, error) {
 }
 
 func (sc *SchedulerControl) onceGetTask() ([]*myModel.SealingTask, error) {
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
 	needSealing := cap(sc.SealingCh) - len(sc.SealingCh)
 	needApP1 := cap(sc.ApP1) - len(sc.ApP1)
 	//needP2C2 := cap(sc.P2C2) - len(sc.P2C2)
@@ -289,19 +294,23 @@ func (sc *SchedulerControl) onceScheduler() error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("=======================================get task")
 	tmpP1Tasks := []*myModel.SealingTask{}
 	for k, v := range tasks {
 		if v.TaskType == "seal/v0/precommit/1" {
 			tmpP1Tasks = append(tmpP1Tasks, tasks[k])
-			tasks = append(tasks[:k], tasks[k+1:]...)
+			if k != len(tasks)-1 {
+				tasks = append(tasks[:k], tasks[k+1:]...)
+			} else {
+				tasks = tasks[:k]
+			}
 		}
 	}
 	for {
-		if len(tmpP1Tasks) < 5 {
-			break
-		} else {
+		if len(tmpP1Tasks) >= 5 {
 			tasks = append(tasks, tmpP1Tasks...)
 		}
+		break
 	}
 	for _, task := range tasks {
 		log.Infof("get task, objId: [%v], sector_id: [%v], task_type: [%v]\n", task.ID.String(), task.SectorRef.ID.Number, task.TaskType)
@@ -345,9 +354,6 @@ func (sc *SchedulerControl) ap(taskId primitive.ObjectID, taskType string, sid u
 		return
 	}
 
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
-
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if ok && err == nil {
 		sc.AP <- taskReq{
@@ -371,9 +377,6 @@ func (sc *SchedulerControl) p1(taskId primitive.ObjectID, taskType string, sid u
 	case <-outTick.C:
 		return
 	}
-
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
 
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if ok && err == nil {
@@ -399,9 +402,6 @@ func (sc *SchedulerControl) p2(taskId primitive.ObjectID, taskType string, sid u
 		return
 	}
 
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
-
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if ok && err == nil {
 		sc.P2 <- taskReq{
@@ -419,8 +419,6 @@ func (sc *SchedulerControl) p2(taskId primitive.ObjectID, taskType string, sid u
 }
 
 func (sc *SchedulerControl) c1(taskId primitive.ObjectID, taskType string, sid uint64, rsProof abi.RegisteredSealProof, sectorRef storage.SectorRef) {
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if err != nil {
 		return
@@ -443,9 +441,6 @@ func (sc *SchedulerControl) c2(taskId primitive.ObjectID, taskType string, sid u
 		return
 	}
 
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
-
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if ok && err == nil {
 		sc.C2 <- taskReq{
@@ -463,8 +458,6 @@ func (sc *SchedulerControl) c2(taskId primitive.ObjectID, taskType string, sid u
 }
 
 func (sc *SchedulerControl) finalizeSector(taskId primitive.ObjectID, taskType string, sid uint64, rsProof abi.RegisteredSealProof, sectorRef storage.SectorRef) {
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
 
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if err != nil {
