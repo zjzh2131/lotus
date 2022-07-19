@@ -78,101 +78,25 @@ func (sc *SchedulerControl) myScheduler() {
 func (sc *SchedulerControl) myCallChildProcess() {
 	// step 4. child process
 	for {
-		time.Sleep(10 * time.Second)
 		sc.lk.Lock()
-		tasks := []taskReq{}
-		lap := len(sc.AP)
-		lp1 := len(sc.P1)
-		lp2 := len(sc.P2)
-		lc1 := len(sc.C1)
-		lc2 := len(sc.C2)
-		lfz := len(sc.FZ)
-		if lap|lp1|lp2|lc1|lc2|lfz == 0 {
-			sc.lk.Unlock()
-			continue
+		select {
+		case apReq := <-sc.AP:
+			sc.Cp(apReq)
+		case p1Req := <-sc.P1:
+			sc.Cp(p1Req)
+		case p2Req := <-sc.P2:
+			sc.Cp(p2Req)
+		case c1Req := <-sc.C1:
+			sc.Cp(c1Req)
+		case c2Req := <-sc.C2:
+			sc.Cp(c2Req)
+		case fzReq := <-sc.FZ:
+			sc.Cp(fzReq)
+		default:
+			time.Sleep(10 * time.Millisecond)
 		}
-		for i := 0; i < lap; i++ {
-			select {
-			case task := <-sc.AP:
-				tasks = append(tasks, task)
-			default:
-			}
-		}
-		for i := 0; i < lp1; i++ {
-			select {
-			case task := <-sc.P1:
-				tasks = append(tasks, task)
-			default:
-			}
-		}
-		for i := 0; i < lp2; i++ {
-			select {
-			case task := <-sc.P2:
-				tasks = append(tasks, task)
-			default:
-			}
-		}
-		for i := 0; i < lc1; i++ {
-			select {
-			case task := <-sc.C1:
-				tasks = append(tasks, task)
-			default:
-			}
-		}
-		for i := 0; i < lc2; i++ {
-			select {
-			case task := <-sc.C2:
-				tasks = append(tasks, task)
-			default:
-			}
-		}
-		for i := 0; i < lfz; i++ {
-			select {
-			case task := <-sc.FZ:
-				tasks = append(tasks, task)
-			default:
-			}
-		}
-		fmt.Println("-=================================================tmpcp")
-		sc.tmpCp(tasks)
 		sc.lk.Unlock()
-		//select {
-		//case apReq := <-sc.AP:
-		//	sc.Cp(apReq)
-		//case p1Req := <-sc.P1:
-		//	sc.Cp(p1Req)
-		//case p2Req := <-sc.P2:
-		//	sc.Cp(p2Req)
-		//case c1Req := <-sc.C1:
-		//	sc.Cp(c1Req)
-		//case c2Req := <-sc.C2:
-		//	sc.Cp(c2Req)
-		//case fzReq := <-sc.FZ:
-		//	sc.Cp(fzReq)
-		//}
 	}
-}
-
-func (sc *SchedulerControl) tmpCp(tasks []taskReq) {
-	go func() {
-		if len(tasks) == 0 {
-			return
-		}
-		taskTypes := []string{}
-		ids := []string{}
-		for _, task := range tasks {
-			id := fmt.Sprintf("%v", task.ID)
-			id = strings.Split(id, `"`)[1]
-			ids = append(ids, id)
-			taskTypes = append(taskTypes, task.TaskType)
-		}
-		fmt.Println("================================================qwjoidnqwudoqwnuoqwo")
-		err := callCp(strings.Join(taskTypes, ","), "58,59", "6", strings.Join(ids, ","), "")
-		if err != nil {
-			fmt.Println(err)
-			//myMongo.UpdateStatus(task.ID, "failed")
-		}
-	}()
 }
 
 func (sc *SchedulerControl) getTask() ([]*myModel.SealingTask, error) {
@@ -292,23 +216,6 @@ func (sc *SchedulerControl) onceScheduler() error {
 	tasks, err := sc.onceGetTask()
 	if err != nil {
 		return err
-	}
-	tmpP1Tasks := []*myModel.SealingTask{}
-	for k, v := range tasks {
-		if v.TaskType == "seal/v0/precommit/1" {
-			tmpP1Tasks = append(tmpP1Tasks, tasks[k])
-			if k != len(tasks)-1 {
-				tasks = append(tasks[:k], tasks[k+1:]...)
-			} else {
-				tasks = tasks[:k]
-			}
-		}
-	}
-	for {
-		if len(tmpP1Tasks) >= 5 {
-			tasks = append(tasks, tmpP1Tasks...)
-		}
-		break
 	}
 	for _, task := range tasks {
 		log.Infof("get task, objId: [%v], sector_id: [%v], task_type: [%v]\n", task.ID.String(), task.SectorRef.ID.Number, task.TaskType)
@@ -456,7 +363,6 @@ func (sc *SchedulerControl) c2(taskId primitive.ObjectID, taskType string, sid u
 }
 
 func (sc *SchedulerControl) finalizeSector(taskId primitive.ObjectID, taskType string, sid uint64, rsProof abi.RegisteredSealProof, sectorRef storage.SectorRef) {
-
 	ok, err := myMongo.FindAndModifyForStatus(taskId, "pending", "running")
 	if err != nil {
 		return
@@ -473,9 +379,6 @@ func (sc *SchedulerControl) finalizeSector(taskId primitive.ObjectID, taskType s
 }
 
 func (sc *SchedulerControl) Cp(task taskReq) {
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
-
 	id := fmt.Sprintf("%v", task.ID)
 	id = strings.Split(id, `"`)[1]
 
@@ -508,7 +411,7 @@ func (sc *SchedulerControl) Cp(task taskReq) {
 			cpusStr = append(cpusStr, strconv.Itoa(v))
 		}
 
-		log.Infof("child process start: SectorId(%v), TaskType(%v)\n", task.SectorId, task.TaskType)
+		log.Infof("child process start: SectorId(%v), TaskType(%v), numaResource(%v)\n", task.SectorId, task.TaskType, bound)
 		//err := callChildProcess([]string{task.TaskType, id, string(sector), strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId)})
 		err := callCp(task.TaskType, strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId), id, string(sector))
 		if err != nil {
