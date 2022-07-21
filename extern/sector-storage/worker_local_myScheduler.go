@@ -382,7 +382,7 @@ func (sc *SchedulerControl) Cp(task taskReq) {
 	id := fmt.Sprintf("%v", task.ID)
 	id = strings.Split(id, `"`)[1]
 
-	sector, _ := json.Marshal(task)
+	//sector, _ := json.Marshal(task)
 	go func() {
 		switch task.TaskType {
 		case "seal/v0/addpiece":
@@ -412,8 +412,8 @@ func (sc *SchedulerControl) Cp(task taskReq) {
 		}
 
 		log.Infof("child process start: SectorId(%v), TaskType(%v), numaResource(%v)\n", task.SectorId, task.TaskType, bound)
-		//err := callChildProcess([]string{task.TaskType, id, string(sector), strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId)})
-		err := callCp(task.TaskType, strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId), id, string(sector))
+		err := callChildProcess([]string{task.TaskType, id, "", strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId)})
+		//err := callCp(task.TaskType, strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId), id, "")
 		if err != nil {
 			myMongo.UpdateStatus(task.ID, "failed")
 		}
