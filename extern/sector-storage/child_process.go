@@ -2,7 +2,6 @@ package sectorstorage
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 	migration "github.com/filecoin-project/lotus/my/migrate"
@@ -48,7 +47,7 @@ var tasksNeedNumaResource = map[string]applicationResource{
 		cpuCount: 1,
 	},
 	"seal/v0/precommit/1": {
-		cpuCount: 2,
+		cpuCount: 3,
 	},
 	"seal/v0/precommit/2": {
 		cpuCount: 1,
@@ -78,16 +77,16 @@ func init() {
 
 func register() error {
 	log.Infof("child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-
+	os.Setenv("cpus", os.Args[3])
 	// set numa
-	if os.Args[3] != "" {
-		err := boundCpu(os.Args[3], strconv.Itoa(os.Getpid()))
-		if err != nil {
-			return errors.New("bound cpu error")
-		}
-		fmt.Printf("bound cpus: [%v]\n", os.Args[3])
-	}
-
+	//if os.Args[3] != "" {
+	//	err := boundCpu(os.Args[3], strconv.Itoa(os.Getpid()))
+	//	if err != nil {
+	//		return errors.New("bound cpu error")
+	//	}
+	//	fmt.Printf("bound cpus: [%v]\n", os.Args[3])
+	//}
+	//
 	nodeId, _ := strconv.Atoi(os.Args[4])
 	if nodeId == -1 {
 		myNuma.SetPreferred(nodeId)
