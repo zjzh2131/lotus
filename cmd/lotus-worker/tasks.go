@@ -132,6 +132,7 @@ var myTask = &cli.Command{
 		os.Setenv("column_batch", columnBatch)
 		os.Setenv("tree_batch", treeBatch)
 		os.Setenv("sector_id", sectorId)
+		os.Setenv("sector_id", sectorId)
 
 		switch taskType {
 		case "seal/v0/addpiece":
