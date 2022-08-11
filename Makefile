@@ -67,6 +67,7 @@ deps: $(BUILD_DEPS)
 build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway lotus-fountain lotus-stats
 .PHONY: build-devnets
 
+# -gcflags "-N -l"
 debug: GOFLAGS+=-tags=debug
 debug: build-devnets
 

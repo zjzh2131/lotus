@@ -109,28 +109,28 @@ func TestSelectStoreMachine(t *testing.T) {
 func TestFtp(t *testing.T) {
 	os.Setenv("GOLOG_OUTPUT", "file")
 	os.Setenv("GOLOG_FILE", "/home/lotus/worker.log")
-	go MonitorStoreMachine()
+	//go MonitorStoreMachine()
 	//if err := StoreMachineManager.NewStoreMachines(ctx); err != nil {
 	//	fmt.Println("NewStoreMachines err:", err)
 	//	return
 	//}
-	err := NewStoreMachines(context.TODO())
-	if err != nil {
-		fmt.Println("gg err:", err)
-		return
-	}
-
-	machine, err := SelectStoreMachine(context.TODO(), NetWorkIOBalance, "")
-	if err != nil {
-		fmt.Println("select err:", err)
-		return
-	}
-	fmt.Println(machine)
+	//err := NewStoreMachines(context.TODO())
+	//if err != nil {
+	//	fmt.Println("gg err:", err)
+	//	return
+	//}
+	//
+	//machine, err := SelectStoreMachine(context.TODO(), NetWorkIOBalance, "")
+	//if err != nil {
+	//	fmt.Println("select err:", err)
+	//	return
+	//}
+	//fmt.Println(machine)
 
 	p := MigrateParam{
 		SectorID:  "s-t01000-1",
 		FromIP:    "192.168.0.128",
-		FromPath:  "/home/lotus/.genesis-sectors",
+		FromPath:  "/home/xtzjsgfw/.genesis-sectors",
 		StoreIP:   "192.168.0.11",
 		StorePath: "/cephfs/data/nfs",
 		FtpEnv: FtpEnvStruct{
@@ -140,7 +140,7 @@ func TestFtp(t *testing.T) {
 		},
 	}
 	fmt.Println("start ftp")
-	err = MigrateWithFtp(p, abi.RegisteredSealProof(5))
+	err := MigrateWithFtp(p, abi.RegisteredSealProof(5))
 	if err != nil {
 		fmt.Println("ftp err:", err)
 		return

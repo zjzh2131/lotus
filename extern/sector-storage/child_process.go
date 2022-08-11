@@ -2,6 +2,7 @@ package sectorstorage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 	migration "github.com/filecoin-project/lotus/my/migrate"
@@ -11,6 +12,7 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 	"github.com/hashicorp/go-multierror"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
 	"os/exec"
 	"path/filepath"
@@ -47,7 +49,7 @@ var tasksNeedNumaResource = map[string]applicationResource{
 		cpuCount: 1,
 	},
 	"seal/v0/precommit/1": {
-		cpuCount: 3,
+		cpuCount: 4,
 	},
 	"seal/v0/precommit/2": {
 		cpuCount: 1,
@@ -78,6 +80,7 @@ func init() {
 func register() error {
 	log.Infof("child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
 	os.Setenv("cpus", os.Args[3])
+	os.Setenv("sector_type", "CC")
 	// set numa
 	//if os.Args[3] != "" {
 	//	err := boundCpu(os.Args[3], strconv.Itoa(os.Getpid()))
@@ -86,9 +89,15 @@ func register() error {
 	//	}
 	//	fmt.Printf("bound cpus: [%v]\n", os.Args[3])
 	//}
-	//
 	nodeId, _ := strconv.Atoi(os.Args[4])
-	if nodeId == -1 {
+	if nodeId != -1 {
+		if os.Args[3] != "" {
+			err := boundCpu(os.Args[3], strconv.Itoa(os.Getpid()))
+			if err != nil {
+				return errors.New("bound cpu error")
+			}
+			fmt.Printf("bound cpus: [%v]\n", os.Args[3])
+		}
 		myNuma.SetPreferred(nodeId)
 		fmt.Printf("bound node memory: [%v]\n", nodeId)
 	}
@@ -97,6 +106,11 @@ func register() error {
 	if call, ok := tasksCaller[os.Args[0]]; ok {
 		err := call(os.Args[1], os.Args[3], os.Args[4])
 		if err != nil {
+			hex, err := primitive.ObjectIDFromHex(os.Args[1])
+			if err != nil {
+				return err
+			}
+			myMongo.UpdateStatus(hex, "failed")
 			return err
 		}
 	}
@@ -217,7 +231,7 @@ func ap(taskId, cpus, node string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Infof("Recovered in ap: %v", r)
-			wrappedError := fmt.Errorf("recover for error: %w", r)
+			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
 		}
@@ -313,7 +327,7 @@ func p1(taskId, cpus, node string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Infof("Recovered in p1: %v", r)
-			wrappedError := fmt.Errorf("recover for error: %w", r)
+			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
 		}
@@ -383,7 +397,7 @@ func p2(taskId, cpus, node string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Infof("Recovered in p2: %v", r)
-			wrappedError := fmt.Errorf("recover for error: %w", r)
+			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
 		}
@@ -451,7 +465,7 @@ func c1(taskId, cpus, node string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Infof("Recovered in c1: %v", r)
-			wrappedError := fmt.Errorf("recover for error: %w", r)
+			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
 		}
@@ -549,7 +563,7 @@ func c2(taskId, cpus, node string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Infof("Recovered in c2: %v", r)
-			wrappedError := fmt.Errorf("recover for error: %w", r)
+			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
 		}
@@ -653,7 +667,7 @@ func fs(taskId, cpus, node string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Infof("Recovered in fs: %v", r)
-			wrappedError := fmt.Errorf("recover for error: %w", r)
+			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
 		}
@@ -731,7 +745,8 @@ func (l *MyTmpLocalWorkerPathProvider) AcquireSector(ctx context.Context, sector
 	}
 	machinePath := machine[0].WorkerLocalPath
 	// TODO t0 f0
-	folder := fmt.Sprintf("s-t0%v-%v", sector.ID.Miner, sector.ID.Number)
+	//folder := fmt.Sprintf("s-t0%v-%v", sector.ID.Miner, sector.ID.Number)
+	folder := "s-t038779-1"
 	return storiface.SectorPaths{
 		ID:          sector.ID,
 		Unsealed:    filepath.Join(machinePath, "unsealed", folder),

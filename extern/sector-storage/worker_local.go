@@ -137,15 +137,9 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc,
 		}
 	}()
 
-	minerMachine, err := myMongo.FindOneMachine(bson.M{
-		"role": "miner",
-		"ip":   myUtils.GetLocalIPv4s(),
-	})
-	if err != nil {
-		panic("保证worker不是运行在miner")
-	}
-	// 保证worker不是运行在miner
-	if minerMachine == nil {
+	enableMyScheduler := os.Getenv("ENABLE_MY_SCHEDULER")
+	fmt.Println("ENABLE_MY_SCHEDULER:", enableMyScheduler)
+	if enableMyScheduler != "" {
 		sc = &SchedulerControl{
 			lk:        &sync.Mutex{},
 			AP:        make(chan taskReq, 10),
@@ -186,11 +180,12 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc,
 			return nil
 		})
 
+		log.Info("=================================myResource manager start=========================================")
 		myRs = NewMyRS()
 		myRs.String()
+		log.Info("=================================myResource manager done=========================================")
 
 		log.Info("=================================myScheduler start=========================================")
-		//go w.myScheduler()
 		go sc.myScheduler()
 		go sc.myCallChildProcess()
 		log.Info("=================================myScheduler done=========================================")

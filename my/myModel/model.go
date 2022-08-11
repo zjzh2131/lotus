@@ -149,6 +149,7 @@ type Machine struct {
 
 type HardwareInfo struct {
 	NUMASet []*NUMANode `json:"numa_set" bson:"numa_set"`
+	GpuSet  []*GpuInfo  `json:"gpu_set" bson:"gpu_set"`
 }
 
 type ControlInfo struct {
@@ -158,6 +159,9 @@ type NUMANode struct {
 	NodeID    uint64   `json:"node_id" bson:"node_id"`
 	Cpus      []uint64 `json:"cpus" bson:"cpus"`
 	TotalSize uint64   `json:"total_size" bson:"total_size"`
+}
+
+type GpuInfo struct {
 }
 
 type FtpEnv struct {

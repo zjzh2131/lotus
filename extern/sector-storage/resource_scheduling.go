@@ -12,9 +12,20 @@ import (
 	"sync/atomic"
 )
 
+type NeedResource struct {
+	cpuCount int
+	task     taskReq
+}
+
+type BoundResource struct {
+	cpus   []int
+	nodeId int
+}
+
 type MyResourceScheduler struct {
 	lk       sync.Mutex
 	numaSche *numaSche
+	gpuSche  *gpuSche
 }
 
 func NewMyRS() *MyResourceScheduler {
@@ -106,17 +117,17 @@ func (ns *numaSche) occupy(need NeedResource) (bound BoundResource, freed func()
 	if !ok {
 		return BoundResource{nodeId: -1}, func() {}, false
 	}
-	boundMem, memFreed, ok := selectedNode.occupy(need)
-	if !ok {
-		cpuFreed()
-		return BoundResource{nodeId: -1}, func() {}, false
-	}
+	//boundMem, memFreed, ok := selectedNode.occupy(need)
+	//if !ok {
+	//	cpuFreed()
+	//	return BoundResource{nodeId: -1}, func() {}, false
+	//}
 	return BoundResource{
 			cpus:   boundCpu.cpus,
-			nodeId: boundMem.nodeId,
+			nodeId: selectedNode.nodeId,
 		}, func() {
 			cpuFreed()
-			memFreed()
+			//memFreed()
 		}, true
 }
 
@@ -178,12 +189,9 @@ func (c *cpuInfo) occupy(need NeedResource) (bound BoundResource, freed func(), 
 		}, true
 }
 
-type NeedResource struct {
-	cpuCount int
-	task     taskReq
+type gpuSche struct {
 }
 
-type BoundResource struct {
-	cpus   []int
-	nodeId int
+func (gs *gpuSche) occupy(need NeedResource) (bound BoundResource, freed func(), ok bool) {
+	return BoundResource{}, nil, true
 }
