@@ -124,12 +124,14 @@ var myTask = &cli.Command{
 		gpuIdx := cctx.Args().Get(5)
 		columnBatch := cctx.Args().Get(6)
 		treeBatch := cctx.Args().Get(7)
+		sectorId := cctx.Args().Get(8)
 
 		os.Setenv("cpus", cpus)
 		os.Setenv("node_id", nodeId)
 		os.Setenv("gpu_idx", gpuIdx)
 		os.Setenv("column_batch", columnBatch)
 		os.Setenv("tree_batch", treeBatch)
+		os.Setenv("sector_id", sectorId)
 
 		switch taskType {
 		case "seal/v0/addpiece":

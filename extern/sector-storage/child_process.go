@@ -746,7 +746,8 @@ func (l *MyTmpLocalWorkerPathProvider) AcquireSector(ctx context.Context, sector
 	machinePath := machine[0].WorkerLocalPath
 	// TODO t0 f0
 	//folder := fmt.Sprintf("s-t0%v-%v", sector.ID.Miner, sector.ID.Number)
-	folder := "s-t038779-1"
+	folder := os.Getenv("sector_id")
+	//folder := "s-t038779-1"
 	return storiface.SectorPaths{
 		ID:          sector.ID,
 		Unsealed:    filepath.Join(machinePath, "unsealed", folder),
