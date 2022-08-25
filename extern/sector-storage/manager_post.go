@@ -2,6 +2,11 @@ package sectorstorage
 
 import (
 	"context"
+	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
+	"github.com/filecoin-project/lotus/my/db/myMongo"
+	"github.com/filecoin-project/lotus/my/myCommon"
+	"github.com/filecoin-project/lotus/my/myModel"
+	"github.com/filecoin-project/specs-storage/storage"
 	"sort"
 	"sync"
 
@@ -214,19 +219,40 @@ func (m *Manager) generateWindowPoSt(ctx context.Context, minerID abi.ActorID, s
 func (m *Manager) generatePartitionWindowPost(ctx context.Context, spt abi.RegisteredSealProof, ppt abi.RegisteredPoStProof, minerID abi.ActorID, partIndex int, sc []storiface.PostSectorChallenge, randomness abi.PoStRandomness) (proof.PoStProof, []abi.SectorID, error) {
 	log.Infow("generateWindowPost", "index", partIndex)
 
+	//var result storiface.WindowPoStResult
+	//var err error
+	//err := m.windowPoStSched.Schedule(ctx, true, spt, func(ctx context.Context, w Worker) error {
+	//	out, err := w.GenerateWindowPoSt(ctx, ppt, minerID, sc, partIndex, randomness)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	result = out
+	//	return nil
+	//})
+
+	//log.Warnf("generateWindowPost partition:%d, get skip count:%d", partIndex, len(result.Skipped))
+	//return result.PoStProofs, result.Skipped, err
+
 	var result storiface.WindowPoStResult
-	err := m.windowPoStSched.Schedule(ctx, true, spt, func(ctx context.Context, w Worker) error {
-		out, err := w.GenerateWindowPoSt(ctx, ppt, minerID, sc, partIndex, randomness)
-		if err != nil {
-			return err
+	var err error
+	err = myMongo.InitTask(storage.SectorRef{}, string(sealtasks.TTGenerateWindowPoSt), "pending", "", []interface{}{spt, ppt, minerID, partIndex, sc, randomness}...)
+	if err != nil {
+		return proof.PoStProof{}, []abi.SectorID{}, err
+	}
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	err = myCommon.WaitResult(wg, uint64(0), string(sealtasks.TTGenerateWindowPoSt), []string{"done", "failed"}, &result)
+	wg.Wait()
+	if err != nil {
+		in := myModel.SealingTask{
+			TaskType:  "miner",
+			TaskError: err.Error(),
 		}
-
-		result = out
-		return nil
-	})
-
-	log.Warnf("generateWindowPost partition:%d, get skip count:%d", partIndex, len(result.Skipped))
-
+		myMongo.Insert("sealing_tasks", &in)
+		return proof.PoStProof{}, []abi.SectorID{}, err
+	}
 	return result.PoStProofs, result.Skipped, err
 }
 

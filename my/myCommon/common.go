@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
+	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
 	migration "github.com/filecoin-project/lotus/my/migrate"
 	"github.com/filecoin-project/lotus/my/myModel"
@@ -129,6 +130,11 @@ func assignmentOut(task *myModel.SealingTask, out interface{}) (ok bool, err err
 	case *myModel.MyFinalizeSectorOut:
 		if task.TaskResult != "" {
 			return true, xerrors.New(task.TaskError)
+		}
+	case *storiface.WindowPoStResult:
+		err = json.Unmarshal([]byte(task.TaskResult), out.(*storiface.WindowPoStResult))
+		if err != nil {
+			return false, err
 		}
 	default:
 		return false, xerrors.New("myScheduler: This type is not triggered")

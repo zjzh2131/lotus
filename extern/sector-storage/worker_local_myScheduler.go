@@ -382,17 +382,29 @@ func (sc *SchedulerControl) Cp(task taskReq) {
 	id := fmt.Sprintf("%v", task.ID)
 	id = strings.Split(id, `"`)[1]
 
-	//sector, _ := json.Marshal(task)
 	go func() {
+		// gpuSche
+		var gpuIdx int = -1
+
 		switch task.TaskType {
 		case "seal/v0/addpiece":
 			defer func() { <-sc.ApP1 }()
 		case "seal/v0/precommit/1":
 			defer func() { <-sc.ApP1 }()
 		case "seal/v0/precommit/2":
+			i, f, ok := myRs.GetGpu(task)
+			if ok {
+				gpuIdx = i.gpuId
+				defer f()
+			}
 			defer func() { <-sc.P2C2 }()
 		case "seal/v0/commit/1":
 		case "seal/v0/commit/2":
+			i, f, ok := myRs.GetGpu(task)
+			if ok {
+				gpuIdx = i.gpuId
+				defer f()
+			}
 			defer func() { <-sc.P2C2 }()
 		case "seal/v0/finalize":
 			defer func() {
@@ -401,6 +413,7 @@ func (sc *SchedulerControl) Cp(task taskReq) {
 			}()
 		default:
 		}
+		// numaSche
 		var cpusStr []string
 		bound, freed, ok := myRs.GetNuma(task, tasksNeedNumaResource[task.TaskType].cpuCount)
 		if !ok {
@@ -411,9 +424,13 @@ func (sc *SchedulerControl) Cp(task taskReq) {
 			cpusStr = append(cpusStr, strconv.Itoa(v))
 		}
 
-		log.Infof("child process start: SectorId(%v), TaskType(%v), numaResource(%v)\n", task.SectorId, task.TaskType, bound)
-		err := callChildProcess([]string{task.TaskType, id, "", strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId)})
-		//err := callCp(task.TaskType, strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId), id, "")
+		log.Infof("child process start: SectorId(%v), TaskType(%v), numaResource(%v), gpuResource(%v)\n", task.SectorId, task.TaskType, bound, gpuIdx)
+		var gpuIdxEnv string
+		if gpuIdx != -1 {
+			gpuIdxEnv = strconv.Itoa(gpuIdx)
+		}
+		//err := callChildProcess([]string{task.TaskType, id, "", strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId)})
+		err := callCp(task.TaskType, strings.Join(cpusStr, ","), strconv.Itoa(bound.nodeId), id, "", gpuIdxEnv)
 		if err != nil {
 			myMongo.UpdateStatus(task.ID, "failed")
 		}
@@ -573,11 +590,11 @@ func (sc *SchedulerControl) String() string {
 	apP1Str := fmt.Sprintf("apP1 len: %d, cap: %d\n", len(sc.ApP1), cap(sc.ApP1))
 	p2c2Str := fmt.Sprintf("p2C2 len: %d, cap: %d\n", len(sc.P2C2), cap(sc.P2C2))
 
-	aPStr := fmt.Sprintf("ap len: %d, cap: %d\n", len(sc.AP), cap(sc.AP))
-	p1Str := fmt.Sprintf("p1 len: %d, cap: %d\n", len(sc.P1), cap(sc.P1))
-	p2Str := fmt.Sprintf("p2 len: %d, cap: %d\n", len(sc.P2), cap(sc.P2))
-	c1Str := fmt.Sprintf("c1 len: %d, cap: %d\n", len(sc.C1), cap(sc.C1))
-	c2Str := fmt.Sprintf("c2 len: %d, cap: %d\n", len(sc.C2), cap(sc.C2))
+	aPStr := fmt.Sprintf("Ap len: %d, cap: %d\n", len(sc.AP), cap(sc.AP))
+	p1Str := fmt.Sprintf("P1 len: %d, cap: %d\n", len(sc.P1), cap(sc.P1))
+	p2Str := fmt.Sprintf("P2 len: %d, cap: %d\n", len(sc.P2), cap(sc.P2))
+	c1Str := fmt.Sprintf("C1 len: %d, cap: %d\n", len(sc.C1), cap(sc.C1))
+	c2Str := fmt.Sprintf("C2 len: %d, cap: %d\n", len(sc.C2), cap(sc.C2))
 	fzStr := fmt.Sprintf("fz len: %d, cap: %d\n", len(sc.FZ), cap(sc.FZ))
 	return sealingMStr + sealingStr + apP1Str + p2c2Str + aPStr + p1Str + p2Str + c1Str + c2Str + fzStr
 }

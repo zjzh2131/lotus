@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/filecoin-project/lotus/my/db/myMongo"
+	"github.com/filecoin-project/lotus/my/myModel"
 	"github.com/filecoin-project/lotus/my/myUtils"
 	"go.mongodb.org/mongo-driver/bson"
 	"io"
@@ -191,6 +192,12 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc,
 		log.Info("=================================myScheduler done=========================================")
 	}
 
+	enableMyWindowPoSt := os.Getenv("ENABLE_MY_WindowPoSt")
+	if enableMyWindowPoSt != "" {
+		log.Info("=================================MyWindowPoStSche start=========================================")
+		go w.MyWindowPoStSche()
+		log.Info("=================================MyWindowPoStSche done=========================================")
+	}
 	return w
 }
 
@@ -687,6 +694,109 @@ func (l *LocalWorker) GenerateWinningPoSt(ctx context.Context, ppt abi.Registere
 	}
 
 	return sb.GenerateWinningPoStWithVanilla(ctx, ppt, mid, randomness, vproofs)
+}
+
+func (l *LocalWorker) MyWindowPoStSche() {
+	for {
+		select {
+		case <-l.closing:
+			return
+		default:
+		}
+
+		// find task
+		tasks, _ := myMongo.GetSuitableTask([]uint64{}, []string{string(sealtasks.TTGenerateWindowPoSt)}, "pending", int64(1))
+		if len(tasks) == 0 {
+			continue
+		}
+		_ = myMongo.UpdateTaskResStatus(tasks[0].ID, "running", "")
+		err := l.MyWindowPoSt(tasks[0])
+		if err != nil {
+			_ = myMongo.UpdateTaskResStatus(tasks[0].ID, "failed", "")
+		}
+	}
+}
+
+func (l *LocalWorker) MyWindowPoSt(task *myModel.SealingTask) (err error) {
+	var resultError error
+	//task, err := myMongo.FindByObjId(taskId)
+	//if err != nil {
+	//	resultError = multierror.Append(resultError, err)
+	//	return err
+	//}
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Infof("Recovered in windowPoSt: %v", r)
+			wrappedError := fmt.Errorf("recover for error: %v", r)
+			resultError = multierror.Append(resultError, wrappedError)
+			err = wrappedError
+		}
+
+		if resultError != nil {
+			update := bson.M{}
+			update["$set"] = bson.D{
+				bson.E{Key: "task_error", Value: resultError.Error()},
+			}
+			myMongo.UpdateTask(bson.M{"_id": task.ID}, update)
+		}
+	}()
+
+	//sb, err := ffiwrapper.New(&MyTmpLocalWorkerPathProvider{})
+	//if err != nil {
+	//	resultError = multierror.Append(resultError, err)
+	//	return err
+	//}
+
+	var ppt abi.RegisteredPoStProof
+	var mid abi.ActorID
+	var sectors []storiface.PostSectorChallenge
+	var partitionIdx int
+	var randomness abi.PoStRandomness
+	err = json.Unmarshal([]byte(task.TaskParameters[0]), &ppt)
+	resultError = multierror.Append(resultError, err)
+	err = json.Unmarshal([]byte(task.TaskParameters[1]), &mid)
+	resultError = multierror.Append(resultError, err)
+	err = json.Unmarshal([]byte(task.TaskParameters[2]), &sectors)
+	resultError = multierror.Append(resultError, err)
+	err = json.Unmarshal([]byte(task.TaskParameters[3]), &partitionIdx)
+	resultError = multierror.Append(resultError, err)
+	err = json.Unmarshal([]byte(task.TaskParameters[4]), &randomness)
+	resultError = multierror.Append(resultError, err)
+
+	logId, err := myMongo.InsertTaskLog(task, myUtils.GetLocalIPv4s(), "", "", os.Getpid(), os.Getppid())
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+	}
+
+	windowPoStOut, err := l.GenerateWindowPoSt(context.TODO(), ppt, mid, sectors, partitionIdx, randomness)
+	if err != nil {
+		return err
+	}
+
+	// TODO
+	windowPoStOutByte, err := json.Marshal(windowPoStOut)
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
+
+	err = myMongo.UpdateTaskLog(logId, bson.M{
+		"$set": bson.D{
+			bson.E{Key: "end_time", Value: time.Now().UnixMilli()},
+			bson.E{Key: "updated_at", Value: time.Now().UnixMilli()},
+			bson.E{Key: "updated_by", Value: myUtils.GetLocalIPv4s()},
+		},
+	})
+	resultError = multierror.Append(resultError, err)
+	// TODO
+
+	err = myMongo.UpdateTaskResStatus(task.ID, "done", string(windowPoStOutByte))
+	if err != nil {
+		resultError = multierror.Append(resultError, err)
+		return err
+	}
+	return nil
 }
 
 func (l *LocalWorker) GenerateWindowPoSt(ctx context.Context, ppt abi.RegisteredPoStProof, mid abi.ActorID, sectors []storiface.PostSectorChallenge, partitionIdx int, randomness abi.PoStRandomness) (storiface.WindowPoStResult, error) {

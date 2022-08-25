@@ -20,6 +20,7 @@ type NeedResource struct {
 type BoundResource struct {
 	cpus   []int
 	nodeId int
+	gpuId  int
 }
 
 type MyResourceScheduler struct {
@@ -32,6 +33,7 @@ func NewMyRS() *MyResourceScheduler {
 	return &MyResourceScheduler{
 		lk:       sync.Mutex{},
 		numaSche: initNumaSche(),
+		gpuSche:  initGpuSche(),
 	}
 }
 
@@ -51,10 +53,19 @@ func (rs *MyResourceScheduler) GetNuma(task taskReq, needCpu int) (bound BoundRe
 	return rs.numaSche.occupy(need)
 }
 
-func (rs *MyResourceScheduler) String() {
-	for _, v := range rs.numaSche.nodeSche {
-		fmt.Printf("v:%#v, running: %#v, used: %d\n", v, v.cpus.running, v.usedMem)
+func (rs *MyResourceScheduler) GetGpu(task taskReq) (bound BoundResource, freed func(), ok bool) {
+	need := NeedResource{
+		task: task,
 	}
+	return rs.gpuSche.occupy(need)
+}
+
+func (rs *MyResourceScheduler) String() {
+	//for _, v := range rs.numaSche.nodeSche {
+	//	fmt.Printf("v:%#v, running: %#v, used: %d\n", v, v.cpus.running, v.usedMem)
+	//}
+	fmt.Printf("pending: %#v\n", rs.gpuSche.pending)
+	fmt.Println("running: ", rs.gpuSche.running)
 }
 
 type numaSche struct {
@@ -93,9 +104,9 @@ func initNumaSche() *numaSche {
 
 func (ns nodeSet) sort() {
 	// memory sort
-	sort.SliceStable(ns, func(i, j int) bool {
-		return ns[i].totalMem-ns[i].usedMem > ns[j].totalMem-ns[j].usedMem
-	})
+	//sort.SliceStable(ns, func(i, j int) bool {
+	//	return ns[i].totalMem-ns[i].usedMem > ns[j].totalMem-ns[j].usedMem
+	//})
 
 	// cpu sort
 	sort.SliceStable(ns, func(i, j int) bool {
@@ -164,11 +175,11 @@ type cpuInfo struct {
 }
 
 func (c *cpuInfo) occupy(need NeedResource) (bound BoundResource, freed func(), ok bool) {
+	c.lk.Lock()
+	defer c.lk.Unlock()
 	if len(c.pending) < need.cpuCount {
 		return BoundResource{}, func() {}, false
 	}
-	c.lk.Lock()
-	defer c.lk.Unlock()
 	var tmpCpus []int
 	for i := 0; i < need.cpuCount; i++ {
 		cpu := <-c.pending
@@ -179,7 +190,7 @@ func (c *cpuInfo) occupy(need NeedResource) (bound BoundResource, freed func(), 
 			cpus:   tmpCpus,
 			nodeId: 0,
 		}, func() {
-			fmt.Println("cpu freed")
+			fmt.Printf("cpu freed idx: %#v\n", tmpCpus)
 			c.lk.Lock()
 			defer c.lk.Unlock()
 			for _, v := range tmpCpus {
@@ -190,8 +201,47 @@ func (c *cpuInfo) occupy(need NeedResource) (bound BoundResource, freed func(), 
 }
 
 type gpuSche struct {
+	lk      sync.Mutex
+	pending chan int
+	running map[int]struct{}
+}
+
+func initGpuSche() *gpuSche {
+	workerMachine, err := myMongo.FindOneMachine(bson.M{
+		"ip":   myUtils.GetLocalIPv4s(),
+		"role": "worker",
+	})
+	if err != nil {
+		panic("init gpuSche failed")
+	}
+	gs := &gpuSche{
+		lk:      sync.Mutex{},
+		pending: make(chan int, len(workerMachine.HardwareInfo.GpuSet)),
+		running: make(map[int]struct{}, len(workerMachine.HardwareInfo.GpuSet)),
+	}
+	for i := range workerMachine.HardwareInfo.GpuSet {
+		gs.pending <- i
+	}
+	return gs
 }
 
 func (gs *gpuSche) occupy(need NeedResource) (bound BoundResource, freed func(), ok bool) {
-	return BoundResource{}, nil, true
+	gs.lk.Lock()
+	defer gs.lk.Unlock()
+	if len(gs.pending) == 0 {
+		return BoundResource{
+			gpuId: -1,
+		}, nil, false
+	}
+	gpu := <-gs.pending
+	gs.running[gpu] = struct{}{}
+	return BoundResource{
+			gpuId: gpu,
+		}, func() {
+			fmt.Printf("gpu freed idx: %v\n", gpu)
+			gs.lk.Lock()
+			defer gs.lk.Unlock()
+			gs.pending <- gpu
+			delete(gs.running, gpu)
+		}, true
 }

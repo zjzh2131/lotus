@@ -415,7 +415,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 		if !isZero {
 			// step 1 gen snow id
 			snowId = myUtils.GenSnowIDStr()
-			// step 2 write ap
+			// step 2 write Ap
 			minerMachine, err := myMongo.FindOneMachine(bson.M{
 				"ip":   myUtils.GetLocalIPv4s(),
 				"role": "miner",

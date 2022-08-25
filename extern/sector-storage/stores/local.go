@@ -755,14 +755,12 @@ func (st *Local) GenerateSingleVanillaProof(ctx context.Context, minerID abi.Act
 	var sealed string
 	if si.Update {
 		src, _, err := st.AcquireSector(ctx, sr, storiface.FTUpdate|storiface.FTUpdateCache, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
-		fmt.Printf("=====================================================caice path:%#v\n", src)
 		if err != nil {
 			return nil, xerrors.Errorf("acquire sector: %w", err)
 		}
 		cache, sealed = src.UpdateCache, src.Update
 	} else {
 		src, _, err := st.AcquireSector(ctx, sr, storiface.FTSealed|storiface.FTCache, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
-		fmt.Printf("=====================================================no caice path:%#v\n", src)
 		if err != nil {
 			return nil, xerrors.Errorf("acquire sector: %w", err)
 		}

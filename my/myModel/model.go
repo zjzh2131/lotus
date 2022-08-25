@@ -149,7 +149,7 @@ type Machine struct {
 
 type HardwareInfo struct {
 	NUMASet []*NUMANode `json:"numa_set" bson:"numa_set"`
-	GpuSet  []*GpuInfo  `json:"gpu_set" bson:"gpu_set"`
+	GpuSet  []uint64    `json:"gpu_set" bson:"gpu_set"`
 }
 
 type ControlInfo struct {

@@ -32,12 +32,12 @@ import (
 )
 
 var tasksCaller = map[string]func(string, string, string) error{
-	"seal/v0/addpiece":    ap,
-	"seal/v0/precommit/1": p1,
-	"seal/v0/precommit/2": p2,
-	"seal/v0/commit/1":    c1,
-	"seal/v0/commit/2":    c2,
-	"seal/v0/finalize":    fs,
+	"seal/v0/addpiece":    Ap,
+	"seal/v0/precommit/1": P1,
+	"seal/v0/precommit/2": P2,
+	"seal/v0/commit/1":    C1,
+	"seal/v0/commit/2":    C2,
+	"seal/v0/finalize":    Fs,
 }
 
 type applicationResource struct {
@@ -129,72 +129,6 @@ func boundCpu(cpus, pid string) error {
 	return nil
 }
 
-//func init() {
-//	myReexec.Register("seal/v0/addpiece", func() error {
-//		log.Infof("ap child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-//		var err error
-//		taskId := os.Args[1]
-//		err = ap(taskId)
-//		if err != nil {
-//			return err
-//		}
-//		return nil
-//	})
-//	myReexec.Register("seal/v0/precommit/1", func() error {
-//		log.Infof("p1 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-//		var err error
-//		taskId := os.Args[1]
-//		err = p1(taskId)
-//		if err != nil {
-//			return err
-//		}
-//		return nil
-//	})
-//	myReexec.Register("seal/v0/precommit/2", func() error {
-//		log.Infof("p2 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-//		var err error
-//		taskId := os.Args[1]
-//		err = p2(taskId)
-//		if err != nil {
-//			return err
-//		}
-//		return nil
-//	})
-//	myReexec.Register("seal/v0/commit/1", func() error {
-//		log.Infof("c1 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-//		var err error
-//		taskId := os.Args[1]
-//		err = c1(taskId)
-//		if err != nil {
-//			return err
-//		}
-//		return nil
-//	})
-//	myReexec.Register("seal/v0/commit/2", func() error {
-//		log.Infof("c2 child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-//		var err error
-//		taskId := os.Args[1]
-//		err = c2(taskId)
-//		if err != nil {
-//			return err
-//		}
-//		return nil
-//	})
-//	myReexec.Register("seal/v0/finalize", func() error {
-//		log.Infof("fz child process pid: %v, ppid: %v, args: %v\n", os.Getpid(), os.Getppid(), os.Args)
-//		var err error
-//		taskId := os.Args[1]
-//		err = fs(taskId)
-//		if err != nil {
-//			return err
-//		}
-//		return nil
-//	})
-//	if myReexec.Init() {
-//		os.Exit(0)
-//	}
-//}
-
 func callChildProcess(args []string) error {
 	cmd := reexec.Command(args...)
 	cmd.Stdin = os.Stdin
@@ -206,11 +140,11 @@ func callChildProcess(args []string) error {
 	return nil
 }
 
-func callCp(taskType, cpus, nodeId, taskId, sector string) error {
+func callCp(taskType, cpus, nodeId, taskId, sector, gpuIdx string) error {
 	// numactl --physcpubind=28,29 --membind=7 ./test
 	bindCpu := "--physcpubind=" + cpus
 	bindMem := "--membind=" + nodeId
-	cmd := exec.Command("numactl", bindCpu, bindMem, "lotus-worker", "tasks", "myTask", taskType, taskId, sector, cpus, nodeId)
+	cmd := exec.Command("numactl", bindCpu, bindMem, "lotus-worker", "tasks", "myTask", taskType, taskId, sector, cpus, nodeId, gpuIdx)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
@@ -220,7 +154,7 @@ func callCp(taskType, cpus, nodeId, taskId, sector string) error {
 	return nil
 }
 
-func ap(taskId, cpus, node string) (err error) {
+func Ap(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -230,7 +164,7 @@ func ap(taskId, cpus, node string) (err error) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Infof("Recovered in ap: %v", r)
+			log.Infof("Recovered in Ap: %v", r)
 			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
@@ -316,7 +250,7 @@ func ap(taskId, cpus, node string) (err error) {
 	return nil
 }
 
-func p1(taskId, cpus, node string) (err error) {
+func P1(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -326,7 +260,7 @@ func p1(taskId, cpus, node string) (err error) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Infof("Recovered in p1: %v", r)
+			log.Infof("Recovered in P1: %v", r)
 			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
@@ -386,7 +320,7 @@ func p1(taskId, cpus, node string) (err error) {
 	return nil
 }
 
-func p2(taskId, cpus, node string) (err error) {
+func P2(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -396,7 +330,7 @@ func p2(taskId, cpus, node string) (err error) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Infof("Recovered in p2: %v", r)
+			log.Infof("Recovered in P2: %v", r)
 			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
@@ -454,7 +388,7 @@ func p2(taskId, cpus, node string) (err error) {
 	return nil
 }
 
-func c1(taskId, cpus, node string) (err error) {
+func C1(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -464,7 +398,7 @@ func c1(taskId, cpus, node string) (err error) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Infof("Recovered in c1: %v", r)
+			log.Infof("Recovered in C1: %v", r)
 			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
@@ -552,7 +486,7 @@ func c1(taskId, cpus, node string) (err error) {
 	return nil
 }
 
-func c2(taskId, cpus, node string) (err error) {
+func C2(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -562,7 +496,7 @@ func c2(taskId, cpus, node string) (err error) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Infof("Recovered in c2: %v", r)
+			log.Infof("Recovered in C2: %v", r)
 			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
@@ -656,7 +590,7 @@ func c2(taskId, cpus, node string) (err error) {
 	return nil
 }
 
-func fs(taskId, cpus, node string) (err error) {
+func Fs(taskId, cpus, node string) (err error) {
 	var resultError error
 	task, err := myMongo.FindByObjId(taskId)
 	if err != nil {
@@ -666,7 +600,7 @@ func fs(taskId, cpus, node string) (err error) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Infof("Recovered in fs: %v", r)
+			log.Infof("Recovered in Fs: %v", r)
 			wrappedError := fmt.Errorf("recover for error: %v", r)
 			resultError = multierror.Append(resultError, wrappedError)
 			err = wrappedError
@@ -745,10 +679,8 @@ func (l *MyTmpLocalWorkerPathProvider) AcquireSector(ctx context.Context, sector
 	}
 	machinePath := machine[0].WorkerLocalPath
 	// TODO t0 f0
-	//folder := fmt.Sprintf("s-t0%v-%v", sector.ID.Miner, sector.ID.Number)
-	folder := os.Getenv("sector_id")
+	folder := fmt.Sprintf("s-t0%v-%v", sector.ID.Miner, sector.ID.Number)
 
-	///folder := "s-t038779-1"
 	return storiface.SectorPaths{
 		ID:          sector.ID,
 		Unsealed:    filepath.Join(machinePath, "unsealed", folder),

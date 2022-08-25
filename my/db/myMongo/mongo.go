@@ -591,8 +591,11 @@ func GetSuitableTask(sids []uint64, taskTypes []string, taskStatus string, need 
 	var tasks []*myModel.SealingTask
 
 	filter := bson.M{
-		"sector_ref.id.number": bson.M{"$in": sids},
-		"task_status":          taskStatus,
+		//"sector_ref.id.number": bson.M{"$in": sids},
+		"task_status": taskStatus,
+	}
+	if len(sids) != 0 {
+		filter["sector_ref.id.number"] = bson.M{"$in": sids}
 	}
 	orQuery := []bson.M{}
 	for _, v := range taskTypes {
